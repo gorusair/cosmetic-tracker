@@ -1,0 +1,19 @@
+# robots.txt for https://cosmetic-tracker-cea64.web.app/
+# 마지막 수정일: 2025-10-30
+
+User-agent: *
+Allow: /
+
+# 주요 페이지 접근 허용
+Allow: /index.html
+Allow: /report.html
+Allow: /calendar.html
+
+# 불필요하거나 민감한 파일 차단
+Disallow: /firebase.json
+Disallow: /package.json
+Disallow: /.git/
+Disallow: /.firebase/
+
+# 사이트맵 위치
+Sitemap: https://cosmetic-tracker-cea64.web.app/sitemap.xml

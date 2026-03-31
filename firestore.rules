@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    match /users/{userId}/products/{docId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /users/{userId}/productChanges/{docId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /users/{userId}/skinEvents/{docId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /users/{userId}/usageLogs/{docId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /users/{userId}/usagelogs/{docId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    match /cosmetics/{docId} {
+      allow read, write: if false;
+    }
+
+    match /usagelogs/{docId} {
+      allow create: if request.auth != null
+        && request.resource.data.ownerId == request.auth.uid;
+      allow read, update, delete: if request.auth != null
+        && resource.data.ownerId == request.auth.uid;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
