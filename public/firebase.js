@@ -1,6 +1,6 @@
 (function () {
   const firebaseConfig = {
-    apiKey: "AIzaSyAjphx1kSRf8lmibWlAkdD3ezKoec076MM",
+    apiKey: "AIzaSyAUIuxFUip6jIaDl3jWFtBbgbFdB3TT248",
     authDomain: "cosmetic-tracker-cea64.firebaseapp.com",
     projectId: "cosmetic-tracker-cea64",
     storageBucket: "cosmetic-tracker-cea64.appspot.com",
