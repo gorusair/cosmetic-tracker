@@ -39,6 +39,45 @@ function getPopularProductsElements() {
   };
 }
 
+function getPreferredScrollBehavior() {
+  return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ? "auto"
+    : "smooth";
+}
+
+function openProductRegistrationFromEmptyState() {
+  if (typeof window.scrollToProductFormSection === "function") {
+    window.scrollToProductFormSection({ focusInput: true });
+    return;
+  }
+
+  if (typeof window.scrollToProductCreationForm === "function") {
+    window.scrollToProductCreationForm({ focusInput: true });
+    return;
+  }
+
+  const targetEl = document.getElementById("productCreationCard") || document.getElementById("product-section");
+  targetEl?.scrollIntoView({ behavior: getPreferredScrollBehavior(), block: "start" });
+  document.getElementById("productName")?.focus();
+}
+
+function getPopularProductsEmptyMarkup() {
+  return `
+    <div class="engagement-empty-card popular-products-empty-card">
+      <div class="engagement-empty-icon popular-products-empty-icon" aria-hidden="true">📦</div>
+      <div class="engagement-empty-title popular-products-empty-title">아직 추천 데이터가 부족해요</div>
+      <div class="engagement-empty-desc popular-products-empty-desc">첫 제품을 등록하고 루틴을 기록해보세요</div>
+      <button
+        type="button"
+        class="engagement-empty-cta popular-products-empty-cta"
+        data-popular-empty-action="add-product"
+      >
+        제품 등록하기
+      </button>
+    </div>
+  `;
+}
+
 function getTimestampMillis(value) {
   if (value?.toMillis) return value.toMillis();
   if (value?.toDate) return value.toDate().getTime();
@@ -119,10 +158,11 @@ function renderPopularProducts(products = []) {
   sectionEl.setAttribute("aria-hidden", "false");
   listEl.classList.toggle("hidden", !hasProducts);
   emptyEl.classList.toggle("hidden", hasProducts);
+  emptyEl.setAttribute("aria-hidden", hasProducts ? "true" : "false");
 
   if (!hasProducts) {
     listEl.innerHTML = "";
-    emptyEl.textContent = "아직 인기 데이터가 없어요";
+    emptyEl.innerHTML = getPopularProductsEmptyMarkup();
     return;
   }
 
@@ -166,7 +206,7 @@ function schedulePopularProductsRefresh() {
 }
 
 function bindPopularProductsEvents() {
-  const { listEl } = getPopularProductsElements();
+  const { listEl, emptyEl } = getPopularProductsElements();
   if (!listEl) return;
 
   listEl.addEventListener("click", async (event) => {
@@ -188,6 +228,17 @@ function bindPopularProductsEvents() {
       "naver",
       window.firebaseServices?.auth?.currentUser || null
     );
+  });
+
+  emptyEl?.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+
+    const actionButton = target.closest('[data-popular-empty-action="add-product"]');
+    if (!actionButton) return;
+
+    event.preventDefault();
+    openProductRegistrationFromEmptyState();
   });
 }
 

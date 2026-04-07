@@ -80,6 +80,12 @@ function openPurchaseLink(url, options = {}) {
 export function getPurchaseLink(product, store) {
   if (!product || !PURCHASE_MARKETPLACES.has(store)) return "";
 
+  // 샘플/추천 데이터에 직접 구매 링크가 있으면 그 링크를 우선 사용합니다.
+  const explicitLink = String(product?.buyLinks?.[store] || "").trim();
+  if (/^https?:\/\//i.test(explicitLink)) {
+    return explicitLink;
+  }
+
   const searchKeyword = getPurchaseSearchKeyword(product);
   if (!searchKeyword) return "";
 
