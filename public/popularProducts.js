@@ -1,35 +1,12 @@
-import { getApp, getApps, initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { collection, getDocs, getFirestore, limit, orderBy, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { collection, getDocs, limit, orderBy, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirebaseDb } from "./firebaseClient.js";
 import { handlePurchase } from "./purchaseTracking.js";
 
 const POPULAR_PRODUCT_FETCH_LIMIT = 200;
 const POPULAR_PRODUCT_DISPLAY_LIMIT = 3;
-const FALLBACK_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyAjphx1kSRf8lmibWlAkdD3ezKoec076MM",
-  authDomain: "cosmetic-tracker-cea64.firebaseapp.com",
-  projectId: "cosmetic-tracker-cea64",
-  storageBucket: "cosmetic-tracker-cea64.appspot.com",
-  messagingSenderId: "28075030105",
-  appId: "1:28075030105:web:8a498f39d0ee8b242f6348",
-  measurementId: "G-39BWQ0QVMH"
-};
-
 let renderedPopularProducts = [];
 let refreshTimer = null;
-
-function getFirebaseConfig() {
-  const existingOptions = window.firebaseServices?.app?.options;
-  if (existingOptions && typeof existingOptions === "object" && existingOptions.apiKey) {
-    return existingOptions;
-  }
-  return FALLBACK_FIREBASE_CONFIG;
-}
-
-const app = getApps().length
-  ? getApp()
-  : initializeApp(getFirebaseConfig());
-
-const db = getFirestore(app);
+const db = getFirebaseDb();
 
 function getPopularProductsElements() {
   return {

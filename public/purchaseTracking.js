@@ -1,5 +1,5 @@
-import { getApp, getApps, initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { addDoc, collection, getFirestore, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { addDoc, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getFirebaseDb } from "./firebaseClient.js";
 
 const PURCHASE_CLICK_TRACKING_TIMEOUT_MS = 400;
 const PURCHASE_MARKETPLACES = new Set(["oliveyoung", "coupang", "naver"]);
@@ -8,29 +8,7 @@ const PURCHASE_SEARCH_URL_BY_STORE = {
   coupang: "https://www.coupang.com/np/search?q=",
   naver: "https://search.shopping.naver.com/search/all?query="
 };
-const FALLBACK_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyAjphx1kSRf8lmibWlAkdD3ezKoec076MM",
-  authDomain: "cosmetic-tracker-cea64.firebaseapp.com",
-  projectId: "cosmetic-tracker-cea64",
-  storageBucket: "cosmetic-tracker-cea64.appspot.com",
-  messagingSenderId: "28075030105",
-  appId: "1:28075030105:web:8a498f39d0ee8b242f6348",
-  measurementId: "G-39BWQ0QVMH"
-};
-
-function getFirebaseConfig() {
-  const existingOptions = window.firebaseServices?.app?.options;
-  if (existingOptions && typeof existingOptions === "object" && existingOptions.apiKey) {
-    return existingOptions;
-  }
-  return FALLBACK_FIREBASE_CONFIG;
-}
-
-const app = getApps().length
-  ? getApp()
-  : initializeApp(getFirebaseConfig());
-
-const db = getFirestore(app);
+const db = getFirebaseDb();
 
 function delay(ms) {
   return new Promise((resolve) => {
