@@ -36,6 +36,41 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid;
     }
 
+    match /visits/{docId} {
+      allow create: if request.resource.data.keys().hasOnly([
+          "createdAt",
+          "page",
+          "source",
+          "referrer",
+          "userAgent",
+          "language",
+          "isAnonymous",
+          "uid",
+          "loggedDate"
+        ])
+        && request.resource.data.keys().hasAll([
+          "createdAt",
+          "page",
+          "source",
+          "referrer",
+          "userAgent",
+          "language",
+          "isAnonymous",
+          "uid",
+          "loggedDate"
+        ])
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.page is string
+        && request.resource.data.source is string
+        && request.resource.data.referrer is string
+        && request.resource.data.userAgent is string
+        && request.resource.data.language is string
+        && request.resource.data.isAnonymous is bool
+        && (request.resource.data.uid == null || request.resource.data.uid is string)
+        && request.resource.data.loggedDate is string;
+      allow read, update, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
