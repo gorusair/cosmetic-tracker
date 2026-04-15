@@ -1,15 +1,18 @@
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { addDoc, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getFirebaseAuth, getFirebaseDb } from "./firebaseClient.js";
+import { getFirebaseAuth } from "./firebaseClient.js";
+import {
+  getTrackingUserContext,
+  normalizeTrackingText,
+  writeTrackingEvent
+} from "./trackingShared.js";
 
 const VISIT_LOG_STORAGE_KEY = "visit_logged_today";
 const auth = getFirebaseAuth();
-const db = getFirebaseDb();
 
 function getSourceFromUrl() {
   try {
     const source = new URLSearchParams(window.location.search).get("source");
-    return String(source || "").trim() || "direct";
+    return normalizeTrackingText(source, "direct");
   } catch (error) {
     console.error("Failed to read visit source", error);
     return "direct";
@@ -39,16 +42,16 @@ async function logVisitOnce() {
 
   try {
     const currentUser = auth.currentUser;
+    const { isAnonymous, uid } = getTrackingUserContext(currentUser);
 
-    await addDoc(collection(db, "visits"), {
-      createdAt: serverTimestamp(),
+    await writeTrackingEvent("visits", {
       page: window.location.pathname,
       source: getSourceFromUrl(),
       referrer: document.referrer || "",
       userAgent: navigator.userAgent,
       language: navigator.language || "",
-      isAnonymous: currentUser?.isAnonymous === true,
-      uid: currentUser?.uid || null,
+      isAnonymous,
+      uid,
       loggedDate: today
     });
 

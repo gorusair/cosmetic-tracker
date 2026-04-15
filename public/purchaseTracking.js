@@ -1,5 +1,8 @@
-import { addDoc, collection, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getFirebaseDb } from "./firebaseClient.js";
+import {
+  getTrackingUserContext,
+  normalizeTrackingText,
+  writeTrackingEvent
+} from "./trackingShared.js";
 
 const PURCHASE_CLICK_TRACKING_TIMEOUT_MS = 400;
 const PURCHASE_MARKETPLACES = new Set(["oliveyoung", "coupang", "naver"]);
@@ -8,7 +11,6 @@ const PURCHASE_SEARCH_URL_BY_STORE = {
   coupang: "https://www.coupang.com/np/search?q=",
   naver: "https://search.shopping.naver.com/search/all?query="
 };
-const db = getFirebaseDb();
 
 function delay(ms) {
   return new Promise((resolve) => {
@@ -19,8 +21,8 @@ function delay(ms) {
 function getPurchaseSearchKeyword(product) {
   if (!product) return "";
 
-  const productName = String(product.name || "").trim();
-  const brand = String(product.brand || "").trim();
+  const productName = normalizeTrackingText(product.name);
+  const brand = normalizeTrackingText(product.brand);
   return [productName, brand].filter(Boolean).join(" ");
 }
 
@@ -59,7 +61,7 @@ export function getPurchaseLink(product, store) {
   if (!product || !PURCHASE_MARKETPLACES.has(store)) return "";
 
   // 샘플/추천 데이터에 직접 구매 링크가 있으면 그 링크를 우선 사용합니다.
-  const explicitLink = String(product?.buyLinks?.[store] || "").trim();
+  const explicitLink = normalizeTrackingText(product?.buyLinks?.[store]);
   if (/^https?:\/\//i.test(explicitLink)) {
     return explicitLink;
   }
@@ -76,16 +78,18 @@ export async function trackPurchaseClick(product, store, userId = "anonymous") {
   try {
     if (!product || !PURCHASE_MARKETPLACES.has(store)) return;
 
-    const productName = String(product.name || "").trim();
+    const productName = normalizeTrackingText(product.name);
     if (!productName) return;
-    const brand = String(product.brand || "").trim();
+    const brand = normalizeTrackingText(product.brand);
+    const normalizedUserId = normalizeTrackingText(userId, "anonymous");
 
-    await addDoc(collection(db, "purchaseClicks"), {
+    await writeTrackingEvent("purchaseClicks", {
       productName,
       brand,
       store,
-      timestamp: serverTimestamp(),
-      userId: userId || "anonymous"
+      userId: normalizedUserId
+    }, {
+      timestampField: "timestamp"
     });
 
     window.dispatchEvent(new CustomEvent("purchase-click-tracked", {
@@ -93,7 +97,7 @@ export async function trackPurchaseClick(product, store, userId = "anonymous") {
         productName,
         brand,
         store,
-        userId: userId || "anonymous"
+        userId: normalizedUserId
       }
     }));
   } catch (error) {
@@ -104,14 +108,14 @@ export async function trackPurchaseClick(product, store, userId = "anonymous") {
 export async function handlePurchase(product, store, currentUser = null) {
   if (!product || !PURCHASE_MARKETPLACES.has(store)) return false;
 
-  const productName = String(product.name || "").trim();
+  const productName = normalizeTrackingText(product.name);
   if (!productName) return false;
 
   const url = getPurchaseLink(product, store);
   if (!url) return false;
 
   const purchaseWindow = openPurchaseWindowShell();
-  const userId = currentUser?.uid || "anonymous";
+  const { userId } = getTrackingUserContext(currentUser);
   const trackingPromise = trackPurchaseClick(product, store, userId);
 
   if (!purchaseWindow) {
