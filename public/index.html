@@ -16,12 +16,15 @@
   <script type="module" src="./visitTracking.js"></script>
 </head>
 <body>
+  <div id="demoToolbar" class="demo-toolbar hidden" aria-hidden="true">
+    <button id="demoResetBtn" class="demo-reset-btn" type="button">데모 리셋</button>
+  </div>
   <header class="nav">
     <div class="top-bar">
       <span id="userStatus">로그인 없이 보기 모드</span>
     </div>
     <h1>Cosmetic Tracker</h1>
-    <p class="subtitle">사용 중인 화장품의 잔량과 소진일을 자동으로 관리하세요</p>
+    <p class="subtitle">잔량 기록 · 소진 시점 확인</p>
     <div class="view-switch" aria-label="화면 전환">
       <button id="showHomeBtn" class="view-switch-btn view-switch-btn--active" type="button">홈</button>
       <button id="showHistoryBtn" class="view-switch-btn" type="button">기록</button>
@@ -135,35 +138,25 @@
   <main id="homeScreen">
     <section class="hero-section" aria-label="서비스 소개">
       <div id="today-cta" class="cta-box" aria-hidden="false">
-        <h2 id="topCtaText" class="cta-text">화장품, 다 떨어지고 나서 사지 마세요</h2>
-        <p id="topCtaSubtext" class="cta-subtext">소진 전에 알려주고 바로 구매까지 연결합니다</p>
-        <button id="cta-btn" type="button" data-action="soon-depletion">3초 체험하기</button>
-        <p class="hero-cta-helper">지금 쓰는 화장품 1개만 입력해보세요</p>
-        <ol id="heroQuickGuide" class="hero-quick-guide" aria-label="빠른 사용 흐름" tabindex="-1">
-          <li class="hero-quick-guide-step">
-            <span class="hero-quick-guide-number">1</span>
-            <div class="hero-quick-guide-copy">
-              <strong class="hero-quick-guide-title">화장품 등록</strong>
-              <span class="hero-quick-guide-desc">핵심 정보만 먼저 입력</span>
-            </div>
-          </li>
-          <li class="hero-quick-guide-step">
-            <span class="hero-quick-guide-number">2</span>
-            <div class="hero-quick-guide-copy">
-              <strong class="hero-quick-guide-title">오늘 사용 기록</strong>
-              <span class="hero-quick-guide-desc">루틴 버튼으로 바로 기록</span>
-            </div>
-          </li>
-          <li class="hero-quick-guide-step">
-            <span class="hero-quick-guide-number">3</span>
-            <div class="hero-quick-guide-copy">
-              <strong class="hero-quick-guide-title">소진일 확인</strong>
-              <span class="hero-quick-guide-desc">떨어지기 전에 미리 확인</span>
-            </div>
-          </li>
-        </ol>
-        <p id="topCtaNote" class="cta-note" aria-live="polite">곧 소진 카드가 비어 있으면 제품 등록으로 바로 안내해드려요</p>
-        <div class="hero-auth-actions" aria-label="로그인 옵션">
+        <h2 id="topCtaText" class="cta-text">왜 화장품은 항상 남기고 또 살까?</h2>
+        <p id="topCtaSubtext" class="cta-subtext">내가 얼마나 쓰는지 모르기 때문입니다</p>
+        <div class="hero-proof-shell" aria-label="문제 해결 증거">
+          <div class="hero-proof-label">이렇게 바로 보입니다</div>
+          <div class="hero-proof-list hero-proof-list--single">
+            <article class="hero-proof-card hero-proof-card--urgent" aria-label="수분 세럼 자동 경고 예시">
+              <div class="hero-proof-card-head">
+                <strong class="hero-proof-card-title">수분 세럼</strong>
+                <span class="hero-proof-card-badge">자동 경고</span>
+              </div>
+              <div class="hero-proof-card-dday">D-3</div>
+              <p class="hero-proof-card-copy">지금 안 사면 끊김</p>
+              <p class="hero-proof-card-note">사용하면 자동으로 계산됩니다</p>
+            </article>
+          </div>
+        </div>
+        <button id="cta-btn" type="button" data-action="add-product">내 화장품 언제 끝나는지 확인하기</button>
+        <p id="topCtaNote" class="cta-note" aria-live="polite">CTA를 누르면 제품 등록 화면이 열립니다</p>
+        <div class="hero-auth-actions" aria-label="로그인 및 도움말">
           <button id="helpGuideBtn" class="btn-help hero-auth-btn hero-auth-btn--help" type="button">사용법</button>
           <button id="googleLoginBtn" class="btn-secondary hero-auth-btn" type="button">Google 로그인</button>
           <button id="anonLoginBtn" class="btn-secondary hero-auth-btn" type="button">익명으로 시작</button>
@@ -173,63 +166,67 @@
     </section>
 
     <div id="primaryAppSections" class="primary-app-sections">
-      <section id="soonDepletionSection" class="card soon-depletion-card" aria-label="곧 소진될 제품">
+      <section id="soonDepletionSection" class="card soon-depletion-card" aria-label="자동 관리 미리보기">
         <div class="soon-depletion-header">
           <div>
-            <h3>곧 소진될 제품</h3>
-            <p class="soon-depletion-subtitle">소진 전에 바로 구매해서 루틴이 끊기지 않게 준비하세요</p>
+            <h3>이렇게 자동으로 계산됩니다</h3>
+            <p class="soon-depletion-subtitle">남은 양만 입력하면 D-day가 바로 뜹니다</p>
           </div>
         </div>
         <div id="soonDepletionList">
-          <div class="engagement-empty-card soon-depletion-empty-card">
-            <div class="engagement-empty-icon soon-depletion-empty-icon" aria-hidden="true">⚠️</div>
-            <div class="engagement-empty-title soon-depletion-empty-title">아직 소진 예정 제품이 없어요</div>
-            <div class="engagement-empty-desc soon-depletion-empty-desc">제품 1개만 등록하면 자동으로 소진일을 계산해드려요</div>
-            <button
-              type="button"
-              class="engagement-empty-cta soon-depletion-empty-cta"
-              data-soon-depletion-action="add-product"
-            >
-              제품 등록하기
-            </button>
-          </div>
-          <article class="soon-depletion-item soon-depletion-item--warning soon-depletion-item--preview" aria-label="곧 소진 예시 미리보기">
+          <article class="soon-depletion-item soon-depletion-item--urgent soon-depletion-item--demo" aria-label="수분 세럼 자동 관리 예시">
             <div class="soon-depletion-item-row">
               <div class="soon-depletion-item-title-wrap">
                 <div class="soon-depletion-item-title">수분 세럼</div>
-                <span class="sample-product-badge sample-product-badge--compact sample-product-badge--preview">샘플 예시</span>
               </div>
-              <span class="soon-depletion-status soon-depletion-status--warning">곧 소진</span>
+              <span class="soon-depletion-status soon-depletion-status--urgent">임박</span>
             </div>
             <div class="soon-depletion-item-meta">
               <div class="soon-depletion-item-copy">
-                <div class="soon-depletion-item-days soon-depletion-item-days--warning">
-                  <span class="soon-depletion-item-dday soon-depletion-item-dday--warning">D-3</span>
+                <div class="soon-depletion-item-days soon-depletion-item-days--urgent">
+                  <span class="soon-depletion-item-dday soon-depletion-item-dday--urgent">D-3</span>
                   <span class="soon-depletion-item-days-text">3일 남음</span>
                 </div>
-                <div class="soon-depletion-item-warning soon-depletion-item-warning--warning">내일 루틴 사용 불가</div>
-                <div class="soon-depletion-item-solution soon-depletion-item-solution--warning">지금 구매하면 루틴을 계속 유지할 수 있어요</div>
-              </div>
-              <div class="soon-depletion-item-action">
-                <button type="button" class="purchase-cta-btn soon-depletion-preview-btn" aria-disabled="true">
-                  이런 식으로 알려드려요
-                </button>
-                <div class="soon-depletion-preview-note">실제 제품 등록 후 자동으로 계산됩니다</div>
+                <div class="soon-depletion-item-warning soon-depletion-item-warning--urgent">지금 안 사면 끊김</div>
               </div>
             </div>
           </article>
-          <button
-            type="button"
-            class="soon-depletion-preview-cta"
-            data-soon-depletion-action="preview-add-product"
-          >
-            이렇게 관리하고 싶다면 -> 제품 등록하기
-          </button>
-          <div class="soon-depletion-preview-helper" aria-hidden="true">
-            <p>꾸준히 기록할수록 더 정확해집니다</p>
-            <p>루틴이 끊기지 않게 도와줍니다</p>
-          </div>
+          <article class="soon-depletion-item soon-depletion-item--urgent soon-depletion-item--demo" aria-label="토너 자동 관리 예시">
+            <div class="soon-depletion-item-row">
+              <div class="soon-depletion-item-title-wrap">
+                <div class="soon-depletion-item-title">토너</div>
+              </div>
+              <span class="soon-depletion-status soon-depletion-status--urgent">임박</span>
+            </div>
+            <div class="soon-depletion-item-meta">
+              <div class="soon-depletion-item-copy">
+                <div class="soon-depletion-item-days soon-depletion-item-days--urgent">
+                  <span class="soon-depletion-item-dday soon-depletion-item-dday--urgent">D-7</span>
+                  <span class="soon-depletion-item-days-text">7일 남음</span>
+                </div>
+                <div class="soon-depletion-item-warning soon-depletion-item-warning--urgent">이번 주 안에 준비 필요</div>
+              </div>
+            </div>
+          </article>
+          <article class="soon-depletion-item soon-depletion-item--urgent soon-depletion-item--demo" aria-label="선크림 자동 관리 예시">
+            <div class="soon-depletion-item-row">
+              <div class="soon-depletion-item-title-wrap">
+                <div class="soon-depletion-item-title">선크림</div>
+              </div>
+              <span class="soon-depletion-status soon-depletion-status--urgent">임박</span>
+            </div>
+            <div class="soon-depletion-item-meta">
+              <div class="soon-depletion-item-copy">
+                <div class="soon-depletion-item-days soon-depletion-item-days--urgent">
+                  <span class="soon-depletion-item-dday soon-depletion-item-dday--urgent">D-5</span>
+                  <span class="soon-depletion-item-days-text">5일 남음</span>
+                </div>
+                <div class="soon-depletion-item-warning soon-depletion-item-warning--urgent">다음 루틴 전 재구매</div>
+              </div>
+            </div>
+          </article>
         </div>
+        <p id="soonDepletionNote" class="soon-depletion-note">보이는 D-day는 실제 제품 등록 후 자동으로 내 데이터로 바뀝니다</p>
       </section>
 
       <section class="today-overview-section" aria-label="오늘 루틴 요약">

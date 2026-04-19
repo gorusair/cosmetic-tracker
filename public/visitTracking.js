@@ -9,6 +9,15 @@ import {
 const VISIT_LOG_STORAGE_KEY = "visit_logged_today";
 const auth = getFirebaseAuth();
 
+function isDemoMode() {
+  try {
+    return new URLSearchParams(window.location.search).get("demo") === "1";
+  } catch (error) {
+    console.error("Failed to evaluate demo mode", error);
+    return false;
+  }
+}
+
 function getSourceFromUrl() {
   try {
     const source = new URLSearchParams(window.location.search).get("source");
@@ -30,6 +39,10 @@ function getTodayString() {
 
 function shouldSkipVisitLogging() {
   try {
+    if (isDemoMode()) {
+      return true;
+    }
+
     if (window.location.hostname === "localhost") {
       return true;
     }
@@ -38,7 +51,7 @@ function shouldSkipVisitLogging() {
     return String(testParam || "").toLowerCase() === "true";
   } catch (error) {
     console.error("Failed to evaluate visit logging conditions", error);
-    return window.location.hostname === "localhost";
+    return window.location.hostname === "localhost" || isDemoMode();
   }
 }
 
