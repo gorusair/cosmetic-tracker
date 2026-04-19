@@ -28,7 +28,25 @@ function getTodayString() {
   return `${year}-${month}-${day}`;
 }
 
+function shouldSkipVisitLogging() {
+  try {
+    if (window.location.hostname === "localhost") {
+      return true;
+    }
+
+    const testParam = new URLSearchParams(window.location.search).get("test");
+    return String(testParam || "").toLowerCase() === "true";
+  } catch (error) {
+    console.error("Failed to evaluate visit logging conditions", error);
+    return window.location.hostname === "localhost";
+  }
+}
+
 async function logVisitOnce() {
+  if (shouldSkipVisitLogging()) {
+    return;
+  }
+
   const today = getTodayString();
 
   try {

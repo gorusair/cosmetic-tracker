@@ -1,11 +1,12 @@
 import { collection, getDocs, limit, orderBy, query } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import { getFirebaseDb } from "./firebaseClient.js";
+import { getFirebaseAuth, getFirebaseDb } from "./firebaseClient.js";
 import { handlePurchase } from "./purchaseTracking.js";
 
 const POPULAR_PRODUCT_FETCH_LIMIT = 200;
 const POPULAR_PRODUCT_DISPLAY_LIMIT = 3;
 let renderedPopularProducts = [];
 let refreshTimer = null;
+const auth = getFirebaseAuth();
 const db = getFirebaseDb();
 
 function getPopularProductsElements() {
@@ -14,6 +15,10 @@ function getPopularProductsElements() {
     listEl: document.getElementById("popularProductsList"),
     emptyEl: document.getElementById("popularProductsEmpty")
   };
+}
+
+function getCurrentUser() {
+  return auth.currentUser || null;
 }
 
 function getPreferredScrollBehavior() {
@@ -203,7 +208,7 @@ function bindPopularProductsEvents() {
         brand: item.brand
       },
       "naver",
-      window.firebaseServices?.auth?.currentUser || null
+      getCurrentUser()
     );
   });
 
