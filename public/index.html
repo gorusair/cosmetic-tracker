@@ -19,21 +19,16 @@
   <div id="demoToolbar" class="demo-toolbar hidden" aria-hidden="true">
     <button id="demoResetBtn" class="demo-reset-btn" type="button">데모 리셋</button>
   </div>
+  <button id="testResetBtn" class="debug-reset-btn hidden" type="button" aria-hidden="true">
+    테스트 초기화
+  </button>
   <header class="nav">
-    <div class="top-bar">
-      <span id="userStatus">로그인 없이 보기 모드</span>
-      <div class="dev-controls" aria-label="개발 제어">
-        <button id="navGoogleLoginBtn" class="dev-control-btn" type="button">Google 로그인</button>
-        <button id="testResetBtn" class="dev-control-btn" type="button">테스트 리셋</button>
-        <button id="logoutBtn" class="dev-control-btn hidden" type="button">로그아웃</button>
-      </div>
-    </div>
     <h1>Cosmetic Tracker</h1>
-    <p class="subtitle">잔량 기록 · 소진 시점 확인</p>
     <div class="view-switch" aria-label="화면 전환">
       <button id="showHomeBtn" class="view-switch-btn view-switch-btn--active" type="button">홈</button>
       <button id="showHistoryBtn" class="view-switch-btn" type="button">기록</button>
     </div>
+    <button id="logoutBtn" class="nav-logout-btn hidden" type="button">로그아웃</button>
   </header>
 
   <!-- Usage guide modal -->
@@ -45,15 +40,10 @@
       aria-labelledby="onboardingTitle"
       tabindex="-1"
     >
-      <h3 id="onboardingTitle">Cosmetic Tracker 시작하기</h3>
+      <h3 id="onboardingTitle">사용법</h3>
       <section class="onboarding-section">
         <p class="onboarding-intro">
-          화장품이 언제 떨어질지 이제 기억할 필요 없습니다.
-        </p>
-        <p class="onboarding-intro">
-          Cosmetic Tracker는<br />
-          사용 중인 화장품의 사용량과 소진 시점을<br />
-          자동으로 관리해주는 서비스입니다.
+          제품을 등록하고 오늘 사용을 기록하면 소진일을 자동으로 계산합니다.
         </p>
       </section>
 
@@ -63,32 +53,28 @@
             <span class="onboarding-icon" aria-hidden="true">🧴</span>
             <div>
               <div class="onboarding-step-title">화장품 등록</div>
-              <div class="onboarding-step-desc">제품과 1회 사용량(ml)을 입력하세요.</div>
+              <div class="onboarding-step-desc">제품명만 먼저 입력해도 시작할 수 있습니다.</div>
             </div>
           </div>
           <div class="onboarding-step">
             <span class="onboarding-icon" aria-hidden="true">☀️</span>
             <div>
-              <div class="onboarding-step-title">루틴 사용</div>
+              <div class="onboarding-step-title">오늘 사용 기록</div>
               <div class="onboarding-step-desc">
-                아침 / 저녁 루틴에서 '오늘 사용' 버튼을 누르세요.
+                사용한 제품의 '오늘 사용 기록하기' 버튼을 누르세요.
               </div>
             </div>
           </div>
           <div class="onboarding-step">
             <span class="onboarding-icon" aria-hidden="true">📅</span>
             <div>
-              <div class="onboarding-step-title">소진일 확인</div>
+              <div class="onboarding-step-title">소진일 자동 계산</div>
               <div class="onboarding-step-desc">
-                제품이 언제 떨어지는지 소진 예상일을 확인하세요.
+                남은 용량과 D-day가 사용 기록에 맞춰 업데이트됩니다.
               </div>
             </div>
           </div>
         </div>
-      </section>
-
-      <section class="onboarding-section">
-        <p class="onboarding-cta">지금 사용 중인 화장품을 등록해보세요.</p>
       </section>
       <div class="modal-actions">
         <button id="closeOnboardingBtn" class="btn-secondary" type="button">닫기</button>
@@ -141,41 +127,52 @@
   </div>
 
   <main id="homeScreen">
-    <section class="hero-section" aria-label="서비스 소개">
-      <div id="today-cta" class="cta-box" aria-hidden="false">
-        <h2 id="topCtaText" class="cta-text">왜 화장품은 항상 남기고 또 살까?</h2>
-        <p id="topCtaSubtext" class="cta-subtext">내가 얼마나 쓰는지 모르기 때문입니다</p>
-        <div class="hero-proof-shell" aria-label="문제 해결 증거">
-          <div class="hero-proof-label">이렇게 바로 보입니다</div>
-          <div class="hero-proof-list hero-proof-list--single">
-            <article class="hero-proof-card hero-proof-card--urgent" aria-label="수분 세럼 자동 경고 예시">
-              <div class="hero-proof-card-head">
-                <strong class="hero-proof-card-title">수분 세럼</strong>
-                <span class="hero-proof-card-badge">자동 경고</span>
-              </div>
-              <div class="hero-proof-card-dday">D-3</div>
-              <p class="hero-proof-card-copy">지금 안 사면 끊김</p>
-              <p class="hero-proof-card-note">사용하면 자동으로 계산됩니다</p>
-            </article>
-          </div>
+    <section id="emptyLandingScreen" class="hero-section empty-landing" aria-label="서비스 소개">
+      <div class="empty-landing-shell">
+        <div class="empty-landing-copy">
+          <h2>왜 화장품은 항상 남기고 또 살까?</h2>
+          <p>내가 얼마나 쓰는지 모르기 때문입니다</p>
         </div>
-        <button id="cta-btn" type="button" data-action="add-product">내 화장품 언제 끝나는지 확인하기</button>
-        <p id="topCtaNote" class="cta-note" aria-live="polite">CTA를 누르면 제품 등록 화면이 열립니다</p>
-        <div class="hero-auth-actions" aria-label="로그인 및 도움말">
-          <button id="helpGuideBtn" class="btn-help hero-auth-btn hero-auth-btn--help" type="button">사용법</button>
-          <button id="googleLoginBtn" class="btn-secondary hero-auth-btn" type="button">Google 로그인</button>
-          <button id="anonLoginBtn" class="btn-secondary hero-auth-btn" type="button">익명으로 시작</button>
+
+        <article class="landing-demo-card" aria-label="수분 세럼 자동 관리 예시">
+          <div class="landing-demo-card-head">
+            <strong>수분 세럼</strong>
+            <span>자동 계산</span>
+          </div>
+          <div class="landing-demo-dday">D-3</div>
+          <p>지금 안 사면 루틴이 끊길 수 있어요</p>
+        </article>
+
+        <button id="landingPrimaryCta" class="landing-primary-cta" type="button">
+          내 화장품 언제 끝나는지 확인하기
+        </button>
+
+        <div id="landingStartActions" class="landing-start-actions" aria-label="시작하기">
+          <button id="googleLoginBtn" class="landing-start-btn landing-start-btn--google" type="button">Google 로그인</button>
+          <button id="anonLoginBtn" class="landing-start-btn landing-start-btn--anon" type="button">익명으로 시작</button>
+        </div>
+
+        <div class="landing-secondary-actions">
+          <button id="helpGuideBtn" class="landing-link-btn" type="button">사용법</button>
+          <a
+            class="landing-feedback-link"
+            href="https://docs.google.com/forms/d/e/1FAIpQLSdgUODypct8OkDvoZtyF4J44_tTcnz1klwQxYSx_-xo8l5Qng/viewform"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            피드백 보내기
+          </a>
         </div>
       </div>
     </section>
 
     <div id="primaryAppSections" class="primary-app-sections">
-      <section id="soonDepletionSection" class="card soon-depletion-card today-status-card" aria-label="오늘 상태">
+      <section id="todayActionSection" class="card today-action-card" aria-label="오늘 먼저 할 일">
         <div class="soon-depletion-header">
           <div>
-            <div class="today-status-eyebrow">오늘 상태</div>
-            <h3>오늘 먼저 할 일</h3>
-            <p class="soon-depletion-subtitle">상태를 확인하고 바로 기록하면 D-day와 잔량이 즉시 업데이트됩니다</p>
+            <div class="today-status-eyebrow">오늘 먼저 할 일</div>
+            <h3>지금 챙길 것만 확인하세요</h3>
+            <p class="soon-depletion-subtitle">기록 필요 제품과 소진 임박 제품을 먼저 보여드립니다</p>
           </div>
         </div>
         <div id="homeStatusSummary" class="home-status-summary" aria-label="홈 상태 요약">
@@ -192,63 +189,18 @@
             <strong id="homeRoutineStreakCount">0일</strong>
           </article>
         </div>
-        <div id="soonDepletionList">
-          <article class="soon-depletion-item soon-depletion-item--urgent soon-depletion-item--demo" aria-label="수분 세럼 자동 관리 예시">
-            <div class="soon-depletion-item-row">
-              <div class="soon-depletion-item-title-wrap">
-                <div class="soon-depletion-item-title">수분 세럼</div>
-              </div>
-              <span class="soon-depletion-status soon-depletion-status--urgent">임박</span>
-            </div>
-            <div class="soon-depletion-item-meta">
-              <div class="soon-depletion-item-copy">
-                <div class="soon-depletion-item-days soon-depletion-item-days--urgent">
-                  <span class="soon-depletion-item-dday soon-depletion-item-dday--urgent">D-3</span>
-                  <span class="soon-depletion-item-days-text">3일 남음</span>
-                </div>
-                <div class="soon-depletion-item-remaining">남은량 자동 계산</div>
-                <div class="soon-depletion-item-warning soon-depletion-item-warning--urgent">지금 안 사면 끊김</div>
-              </div>
-            </div>
-          </article>
-          <article class="soon-depletion-item soon-depletion-item--urgent soon-depletion-item--demo" aria-label="토너 자동 관리 예시">
-            <div class="soon-depletion-item-row">
-              <div class="soon-depletion-item-title-wrap">
-                <div class="soon-depletion-item-title">토너</div>
-              </div>
-              <span class="soon-depletion-status soon-depletion-status--urgent">임박</span>
-            </div>
-            <div class="soon-depletion-item-meta">
-              <div class="soon-depletion-item-copy">
-                <div class="soon-depletion-item-days soon-depletion-item-days--urgent">
-                  <span class="soon-depletion-item-dday soon-depletion-item-dday--urgent">D-7</span>
-                  <span class="soon-depletion-item-days-text">7일 남음</span>
-                </div>
-                <div class="soon-depletion-item-remaining">남은량 자동 계산</div>
-                <div class="soon-depletion-item-warning soon-depletion-item-warning--urgent">이번 주 안에 준비 필요</div>
-              </div>
-            </div>
-          </article>
-          <article class="soon-depletion-item soon-depletion-item--urgent soon-depletion-item--demo" aria-label="선크림 자동 관리 예시">
-            <div class="soon-depletion-item-row">
-              <div class="soon-depletion-item-title-wrap">
-                <div class="soon-depletion-item-title">선크림</div>
-              </div>
-              <span class="soon-depletion-status soon-depletion-status--urgent">임박</span>
-            </div>
-            <div class="soon-depletion-item-meta">
-              <div class="soon-depletion-item-copy">
-                <div class="soon-depletion-item-days soon-depletion-item-days--urgent">
-                  <span class="soon-depletion-item-dday soon-depletion-item-dday--urgent">D-5</span>
-                  <span class="soon-depletion-item-days-text">5일 남음</span>
-                </div>
-                <div class="soon-depletion-item-remaining">남은량 자동 계산</div>
-                <div class="soon-depletion-item-warning soon-depletion-item-warning--urgent">다음 루틴 전 재구매</div>
-              </div>
-            </div>
-          </article>
+      </section>
+
+      <section id="soonDepletionSection" class="card soon-depletion-card active-priority-card" aria-label="가장 급한 제품">
+        <div class="soon-depletion-header">
+          <div>
+            <div class="today-status-eyebrow">가장 급한 제품</div>
+            <h3>지금 먼저 써야 할 제품</h3>
+            <p class="soon-depletion-subtitle">D-day, 오늘 기록 여부, 등록일 순으로 자동 정렬됩니다</p>
+          </div>
         </div>
-        <div class="today-status-footer">
+        <div id="soonDepletionList"></div>
+        <div class="today-status-footer hidden" aria-hidden="true">
           <button
             id="todayStatusPrimaryCta"
             class="today-status-primary-cta"
@@ -258,18 +210,30 @@
             오늘 사용 기록하기
           </button>
         </div>
-        <p id="soonDepletionNote" class="soon-depletion-note">보이는 D-day는 실제 제품 등록 후 자동으로 내 데이터로 바뀝니다</p>
+        <p id="soonDepletionNote" class="soon-depletion-note hidden">보이는 D-day는 실제 제품 등록 후 자동으로 내 데이터로 바뀝니다</p>
+      </section>
+
+      <section id="activeTodayCtaSection" class="active-cta-section" aria-label="오늘 사용 기록하기">
+        <div id="today-cta" class="cta-box" aria-hidden="false">
+          <p id="topCtaLabel" class="cta-label hidden">지금 먼저 써야 할 제품</p>
+          <h2 id="topCtaText" class="cta-text">첫 제품</h2>
+          <p id="topCtaSubtext" class="cta-subtext">D-day</p>
+          <button id="cta-btn" type="button" data-action="add-product">오늘 사용 기록하기</button>
+          <p id="topCtaNote" class="cta-note hidden" aria-live="polite"></p>
+        </div>
       </section>
 
       <section id="product-section" aria-label="제품 섹션">
         <div class="product-list-heading">
           <div>
-            <h3>현재 사용 중 제품</h3>
-            <p id="firstActionGuideText" class="first-action-guide-text" data-persistent="true">제품별 D-day, 잔량, 기록 상태를 바로 확인하세요</p>
+            <h3>그 외 사용 중 제품</h3>
+            <p id="firstActionGuideText" class="first-action-guide-text" data-persistent="true">상단 핵심 제품을 제외한 나머지 제품을 보여드려요</p>
           </div>
         </div>
         <div id="activeProductList" class="product-card-list"></div>
+      </section>
 
+      <section id="productAddSection" aria-label="제품 추가">
         <div id="productCreationCard" class="card product-add-card">
           <div class="product-section-heading">
             <div>
@@ -293,31 +257,7 @@
               <button id="productEmptyStateCta" class="empty-state-onboarding-cta" type="button">제품 등록하기</button>
             </div>
           </div>
-          <div class="product-form-explanation" role="note">
-            <strong>제품을 추가하면 소진일과 구매 타이밍을 자동 계산해드려요</strong>
-            <p>입력폼은 보조 작업입니다. 먼저 제품을 추가하면 홈 카드에서 D-day, 남은량, 구매 시점을 바로 볼 수 있어요.</p>
-          </div>
           <div id="productFormShell" class="product-form-shell">
-            <div class="product-form-optional">
-              <button
-                id="productBrandToggleBtn"
-                class="product-optional-toggle"
-                type="button"
-                aria-expanded="false"
-                aria-controls="productBrandGroup"
-              >
-                브랜드도 입력할래요
-              </button>
-              <div id="productBrandGroup" class="usage-config-group product-form-optional-field hidden" aria-hidden="true" hidden>
-                <label for="productBrand" class="field-label">브랜드</label>
-                <input
-                  id="productBrand"
-                  placeholder="예: 헤라 / 라네즈 / 아모레"
-                  aria-describedby="productBrandHelp"
-                />
-                <p id="productBrandHelp" class="usage-input-help">선택 입력 항목이에요</p>
-              </div>
-            </div>
             <div id="productInputContainer" class="inline-form" aria-label="제품 등록 폼">
               <div id="productNameGroup" class="usage-config-group product-form-field product-form-field--name">
                 <label for="productName" class="field-label">제품명</label>
@@ -326,74 +266,120 @@
                   placeholder="예: 헤라 에센스"
                   aria-describedby="productNameHelp productNameError"
                 />
-                <p id="productNameHelp" class="usage-input-help">먼저 제품명을 입력하면 이어서 용량을 정리할 수 있어요</p>
+                <p id="productNameHelp" class="usage-input-help">제품명만 입력해도 바로 추가할 수 있어요</p>
                 <p id="productNameError" class="usage-input-error hidden" aria-live="polite"></p>
               </div>
-              <div class="usage-config-group product-form-field product-form-field--category">
-                <label for="productCategory" class="field-label">카테고리</label>
-                <select id="productCategory">
-                  <option value="토너">토너</option>
-                  <option value="에센스">에센스</option>
-                  <option value="세럼">세럼</option>
-                  <option value="로션">로션</option>
-                  <option value="크림">크림</option>
-                  <option value="선크림">선크림</option>
-                  <option value="바디로션">바디로션</option>
-                  <option value="기타">기타</option>
-                </select>
-                <p class="usage-input-help">추천 사용량이 자동으로 채워져요</p>
+              <div class="product-step-actions">
+                <button
+                  id="productDetailsToggleBtn"
+                  class="product-details-toggle-btn"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="productDetailsFields"
+                >
+                  상세 설정
+                </button>
               </div>
-              <div id="productTotalMlGroup" class="usage-config-group usage-config-group--ml product-form-field product-form-field--total">
-                <label for="productTotalMl" class="field-label">총 용량 (ml)</label>
-                <div class="usage-input-control">
-                  <input
-                    id="productTotalMl"
-                    type="number"
-                    min="5"
-                    step="0.1"
-                    placeholder="예: 30 / 50 / 100 / 200"
-                    inputmode="decimal"
-                    aria-describedby="productTotalMlHelp productTotalMlError"
-                  />
-                  <span class="usage-input-unit">ml</span>
+              <div id="productDetailsFields" class="product-details-fields hidden" aria-hidden="true" hidden>
+                <div class="product-form-optional">
+                  <button
+                    id="productBrandToggleBtn"
+                    class="product-optional-toggle"
+                    type="button"
+                    aria-expanded="false"
+                    aria-controls="productBrandGroup"
+                  >
+                    브랜드 입력
+                  </button>
+                  <div id="productBrandGroup" class="usage-config-group product-form-optional-field hidden" aria-hidden="true" hidden>
+                    <label for="productBrand" class="field-label">브랜드</label>
+                    <input
+                      id="productBrand"
+                      placeholder="예: 헤라 / 라네즈 / 아모레"
+                      aria-describedby="productBrandHelp"
+                    />
+                    <p id="productBrandHelp" class="usage-input-help">선택 입력 항목이에요</p>
+                  </div>
                 </div>
-                <p id="productTotalMlHelp" class="usage-input-help">전체 용량을 입력해주세요</p>
-                <p id="productTotalMlError" class="usage-input-error hidden" aria-live="polite"></p>
-              </div>
-              <div id="productPerUseMlGroup" class="usage-config-group usage-config-group--ml product-form-field product-form-field--per-use">
-                <label for="productPerUseMl" class="field-label">1회 사용량 (ml)</label>
-                <div class="usage-input-control">
+                <div class="usage-config-group product-form-field product-form-field--category">
+                  <label for="productCategory" class="field-label">카테고리</label>
+                  <select id="productCategory">
+                    <option value="기타" selected>기타</option>
+                    <option value="토너">토너</option>
+                    <option value="에센스">에센스</option>
+                    <option value="세럼">세럼</option>
+                    <option value="로션">로션</option>
+                    <option value="크림">크림</option>
+                    <option value="선크림">선크림</option>
+                    <option value="바디로션">바디로션</option>
+                  </select>
+                  <p class="usage-input-help">선택하면 추천 사용량을 채워드려요</p>
+                </div>
+                <div id="productTotalMlGroup" class="usage-config-group usage-config-group--ml product-form-field product-form-field--total">
+                  <label for="productTotalMl" class="field-label">총 용량 (ml)</label>
+                  <div class="usage-input-control">
+                    <input
+                      id="productTotalMl"
+                      type="number"
+                      min="5"
+                      step="0.1"
+                      placeholder="예: 30 / 50 / 100 / 200"
+                      inputmode="decimal"
+                      aria-describedby="productTotalMlHelp productTotalMlError"
+                    />
+                    <span class="usage-input-unit">ml</span>
+                  </div>
+                  <p id="productTotalMlHelp" class="usage-input-help">비워두면 100ml로 시작해요</p>
+                  <p id="productTotalMlError" class="usage-input-error hidden" aria-live="polite"></p>
+                </div>
+                <div id="productPerUseMlGroup" class="usage-config-group usage-config-group--ml product-form-field product-form-field--per-use">
+                  <label for="productPerUseMl" class="field-label">1회 사용량 (ml)</label>
+                  <div class="usage-input-control">
+                    <input
+                      id="productPerUseMl"
+                      type="number"
+                      min="0.1"
+                      step="0.1"
+                      placeholder="예: 0.3 / 0.5 / 2"
+                      inputmode="decimal"
+                      aria-describedby="productPerUseMlHelp productPerUseMlError"
+                    />
+                    <span class="usage-input-unit">ml</span>
+                  </div>
+                  <p id="productPerUseMlHelp" class="usage-input-help">비워두면 1ml로 기록돼요</p>
+                  <p id="productPerUseMlError" class="usage-input-error hidden" aria-live="polite"></p>
+                </div>
+                <div class="usage-config-group product-form-field product-form-field--routine">
+                  <label for="productRoutine" class="field-label">사용 루틴</label>
+                  <select id="productRoutine">
+                    <option value="morning">아침</option>
+                    <option value="night">저녁</option>
+                    <option value="twice_daily">하루 2회</option>
+                    <option value="flexible">자유 사용</option>
+                  </select>
+                  <p class="usage-input-help">언제 쓰는 제품인지 선택해주세요</p>
+                </div>
+                <div id="productUsageFrequencyPerDayGroup" class="usage-config-group usage-config-group--frequency product-form-field product-form-field--frequency hidden" aria-hidden="true" hidden>
+                  <label for="productUsageFrequencyPerDay" class="field-label">하루 사용 횟수</label>
                   <input
-                    id="productPerUseMl"
+                    id="productUsageFrequencyPerDay"
                     type="number"
                     min="0.1"
                     step="0.1"
-                    value="1"
-                    placeholder="예: 0.3 / 0.5 / 2"
+                    placeholder="예: 1.5"
                     inputmode="decimal"
-                    aria-describedby="productPerUseMlHelp productPerUseMlError"
+                    aria-describedby="productUsageFrequencyPerDayHelp productUsageFrequencyPerDayError"
                   />
-                  <span class="usage-input-unit">ml</span>
+                  <p id="productUsageFrequencyPerDayHelp" class="usage-input-help">자유 사용일 때 D-day 계산에 사용돼요</p>
+                  <p id="productUsageFrequencyPerDayError" class="usage-input-error hidden" aria-live="polite"></p>
                 </div>
-                <p id="productPerUseMlHelp" class="usage-input-help">한 번 사용할 때 줄어드는 양이에요</p>
-                <p id="productPerUseMlError" class="usage-input-error hidden" aria-live="polite"></p>
-                <p class="usage-input-auto-help">카테고리에 따라 추천값이 채워져요</p>
-              </div>
-              <div class="usage-config-group product-form-field product-form-field--routine">
-                <label for="productRoutine" class="field-label">사용 루틴</label>
-                <select id="productRoutine">
-                  <option value="both">아침/저녁</option>
-                  <option value="morning">아침</option>
-                  <option value="evening">저녁</option>
-                </select>
-                <p class="usage-input-help">언제 쓰는 제품인지 선택해주세요</p>
+                <p id="usageRecommendation" class="hint usage-recommendation"></p>
               </div>
               <div class="product-form-submit">
                 <button id="addProductBtn" class="product-submit-btn" type="button" disabled>제품 추가</button>
-                <p id="productFormStatus" class="product-form-status" aria-live="polite">핵심 정보만 입력하면 바로 추가할 수 있어요</p>
+                <p id="productFormStatus" class="product-form-status" aria-live="polite">제품명만 입력하면 바로 추가할 수 있어요</p>
               </div>
             </div>
-            <p id="usageRecommendation" class="hint usage-recommendation"></p>
           </div>
         </div>
       </section>
@@ -535,11 +521,15 @@
         </div>
       </section>
 
-      <div class="card feedback-card">
-        <strong>💬 피드백 남기기</strong>
-        <p style="font-size:13px;color:#666">불편한 점이나 추가되면 좋을 기능을 알려주세요</p>
-        <a href="https://docs.google.com/forms/d/e/1FAIpQLSdgUODypct8OkDvoZtyF4J44_tTcnz1klwQxYSx_-xo8l5Qng/viewform" target="_blank" rel="noopener noreferrer">
-          <button>피드백 보내기</button>
+      <div class="active-secondary-links feedback-card">
+        <button id="activeHelpGuideBtn" class="active-secondary-link" type="button">사용법</button>
+        <a
+          class="active-secondary-link"
+          href="https://docs.google.com/forms/d/e/1FAIpQLSdgUODypct8OkDvoZtyF4J44_tTcnz1klwQxYSx_-xo8l5Qng/viewform"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          피드백 보내기
         </a>
       </div>
     </div>
