@@ -162,7 +162,7 @@
       <div class="empty-landing-shell">
         <div class="empty-landing-copy">
           <h2>왜 화장품은 항상 남기고 또 살까?</h2>
-          <p>내가 얼마나 쓰는지 모르기 때문입니다</p>
+          <p>오늘 사용만 기록하면 잔량과 소진일이 자동으로 바뀝니다</p>
         </div>
 
         <article class="landing-demo-card" aria-label="수분 세럼 자동 관리 예시">
@@ -173,6 +173,30 @@
           <div class="landing-demo-dday">D-3</div>
           <p>지금 안 사면 루틴이 끊길 수 있어요</p>
         </article>
+
+        <ol class="landing-flow-list" aria-label="서비스 이용 흐름">
+          <li class="landing-flow-step">
+            <span class="landing-flow-number" aria-hidden="true">1</span>
+            <span class="landing-flow-copy">
+              <strong>제품 추가</strong>
+              <span>용량 입력</span>
+            </span>
+          </li>
+          <li class="landing-flow-step">
+            <span class="landing-flow-number" aria-hidden="true">2</span>
+            <span class="landing-flow-copy">
+              <strong>오늘 사용 기록</strong>
+              <span>잔량 감소</span>
+            </span>
+          </li>
+          <li class="landing-flow-step">
+            <span class="landing-flow-number" aria-hidden="true">3</span>
+            <span class="landing-flow-copy">
+              <strong>소진일 자동 예측</strong>
+              <span>D-day 확인</span>
+            </span>
+          </li>
+        </ol>
 
         <button id="landingPrimaryCta" class="landing-primary-cta" type="button">
           내 화장품 언제 끝나는지 확인하기
@@ -221,15 +245,15 @@
         </div>
       </section>
 
-      <section id="soonDepletionSection" class="card soon-depletion-card active-priority-card" aria-label="지금 먼저 확인할 제품">
+      <section id="soonDepletionSection" class="card soon-depletion-card active-priority-card" aria-label="오늘의 우선 제품">
         <div class="home-section-heading">
           <div>
-            <div class="today-status-eyebrow">지금 먼저</div>
+            <div class="today-status-eyebrow">오늘의 우선 제품</div>
             <h3>오늘 할 일</h3>
           </div>
         </div>
         <div id="soonDepletionList"></div>
-        <div id="activeTodayCtaSection" class="active-cta-section" aria-label="오늘 사용 기록하기">
+        <div id="activeTodayCtaSection" class="active-cta-section" aria-label="지금 사용 기록하기">
           <div id="today-cta" class="home-primary-cta" aria-hidden="false">
             <p id="topCtaHelper" class="cta-helper hidden"></p>
             <button id="cta-btn" type="button" data-action="add-product">오늘 사용 기록하기</button>
@@ -239,11 +263,26 @@
         <p id="soonDepletionNote" class="soon-depletion-note hidden">보이는 D-day는 실제 제품 등록 후 자동으로 내 데이터로 바뀝니다</p>
       </section>
 
-      <section id="product-section" aria-label="제품 섹션">
+      <section id="product-section" aria-label="루틴별 제품 현황">
         <div class="product-list-heading">
           <div>
-            <h3>현재 사용 중 제품</h3>
-            <p id="firstActionGuideText" class="first-action-guide-text" data-persistent="true">추적 중인 제품의 잔량과 소진일을 빠르게 확인하세요</p>
+            <h3>루틴별 제품 현황</h3>
+            <p id="firstActionGuideText" class="first-action-guide-text" data-persistent="true">아침·저녁에 함께 쓰는 제품을 체크하고 한 번에 기록하세요</p>
+          </div>
+          <div class="product-list-controls" aria-label="제품 목록 정렬 및 필터">
+            <label class="product-sort-control" for="productListSort">
+              <span>정렬</span>
+              <select id="productListSort">
+                <option value="depletion">소진 임박순</option>
+                <option value="today" selected>오늘 기록 필요순</option>
+                <option value="name">이름순</option>
+              </select>
+            </label>
+            <div class="product-routine-filter" role="group" aria-label="루틴 필터">
+              <button id="productFilterAllBtn" class="product-filter-btn product-filter-btn--active" type="button" data-product-filter="all" aria-pressed="true">전체</button>
+              <button id="productFilterMorningBtn" class="product-filter-btn" type="button" data-product-filter="morning" aria-pressed="false">아침</button>
+              <button id="productFilterEveningBtn" class="product-filter-btn" type="button" data-product-filter="evening" aria-pressed="false">저녁</button>
+            </div>
           </div>
         </div>
         <div id="activeProductList" class="product-card-list"></div>
@@ -274,7 +313,60 @@
             </div>
           </div>
           <div id="productFormShell" class="product-form-shell">
-            <div id="productInputContainer" class="inline-form" aria-label="제품 등록 폼">
+            <div class="product-add-mode-toggle" role="tablist" aria-label="제품 추가 방식">
+              <button
+                id="singleAddModeBtn"
+                class="product-add-mode-btn product-add-mode-btn--active"
+                type="button"
+                role="tab"
+                aria-selected="true"
+                aria-controls="productInputContainer"
+                data-product-add-mode="single"
+              >
+                일반 추가
+              </button>
+              <button
+                id="quickAddModeBtn"
+                class="product-add-mode-btn"
+                type="button"
+                role="tab"
+                aria-selected="false"
+                aria-controls="quickAddPanel"
+                data-product-add-mode="quick"
+              >
+                빠른 추가
+              </button>
+            </div>
+            <div id="quickAddPanel" class="quick-add-panel hidden" role="tabpanel" aria-labelledby="quickAddModeBtn" aria-hidden="true" hidden>
+              <div class="quick-add-copy">
+                <label for="quickProductNames" class="field-label">빠른 추가 모드</label>
+                <p class="usage-input-help">쉼표나 줄바꿈으로 여러 제품을 한 번에 등록해요</p>
+              </div>
+              <textarea
+                id="quickProductNames"
+                class="quick-product-textarea"
+                placeholder="예:
+토너
+에센스
+크림"
+                aria-describedby="quickAddHelp quickAddStatus"
+              ></textarea>
+              <div class="quick-add-options">
+                <label for="quickAddRoutine" class="field-label">기본 루틴</label>
+                <select id="quickAddRoutine">
+                  <option value="morning" selected>아침</option>
+                  <option value="night">저녁</option>
+                  <option value="twice_daily">하루 2회</option>
+                  <option value="flexible">자유 사용</option>
+                </select>
+                <p id="quickAddHelp" class="usage-input-help">카테고리는 기타, 용량은 100ml, 1회 사용량은 1ml로 시작해요</p>
+              </div>
+              <div class="quick-add-actions">
+                <button id="quickAddProductsBtn" class="product-submit-btn quick-add-submit-btn" type="button" disabled>한 번에 추가</button>
+                <p id="quickAddStatus" class="product-form-status" aria-live="polite">제품명을 쉼표나 줄바꿈으로 입력하세요</p>
+              </div>
+            </div>
+            <div id="productInputContainer" class="inline-form" role="tabpanel" aria-labelledby="singleAddModeBtn">
               <div id="productNameGroup" class="usage-config-group product-form-field product-form-field--name">
                 <label for="productName" class="field-label">제품명</label>
                 <input

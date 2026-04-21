@@ -18,6 +18,7 @@
     const usageActionLockTimers = new Map();
     const renderedProgressPercentByProductId = new Map();
     const pendingRoutineUpdateProductIds = new Set();
+    const pendingProductSetupProductIds = new Set();
     const DEFAULT_REMAINING_PERCENT = 100;
     const DEFAULT_USAGE_STEP_PERCENT = 5;
     const DEFAULT_TOTAL_ML = 100;
@@ -54,7 +55,7 @@
     const HISTORY_ENTRY_LIMIT = 30;
     const HISTORY_LOG_FETCH_LIMIT = 60;
     const PRODUCT_DETAIL_LOG_LIMIT = 6;
-    const HOME_PRODUCT_PREVIEW_LIMIT = 2;
+    const HOME_PRODUCT_PREVIEW_LIMIT = 4;
     const ACTIVE_VIEW_STORAGE_KEY = "cosmeticTrackerActiveView";
     const ROUTINE_STREAK_STORAGE_KEY = "cosmeticTrackerRoutineStreak";
     const ROUTINE_DAILY_STREAK_STORAGE_KEY = "cosmeticTrackerDailyRoutineStreak";
@@ -259,6 +260,10 @@
     let hasRevealedProductDetails = false;
     let hasEnteredPrimaryFlow = false;
     let shouldShowAllHomeProducts = false;
+    let productListSortMode = "today";
+    let productListRoutineFilter = "all";
+    let productAddMode = "single";
+    let openProductSetupEditorId = "";
     let routineSectionHighlightTimer = null;
     let todayOverviewAnimationTimer = null;
     let usageStreakAnimationTimer = null;
@@ -577,6 +582,43 @@
       };
     }
 
+    function detectProductCategoryFromName(productName, fallback = "기타") {
+      const normalizedName = String(productName || "").trim();
+      if (normalizedName.includes("토너")) return "토너";
+      if (normalizedName.includes("에센스")) return "에센스";
+      if (normalizedName.includes("크림")) return "크림";
+      return fallback || "기타";
+    }
+
+    function hasPositiveSetupNumber(value) {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) && numeric > 0;
+    }
+
+    function hasStoredSetupField(raw = {}, fieldName) {
+      const value = raw[fieldName];
+      return value !== undefined && value !== null && String(value).trim() !== "";
+    }
+
+    function shouldProductNeedSetup(raw = {}) {
+      if (raw.setupCompleted === true || raw.setupStatus === "complete" || raw.setupCompletedAt) {
+        return false;
+      }
+      if (raw.needsSetup === true || raw.setupStatus === "needs_setup") {
+        return true;
+      }
+
+      const hasCategory = hasStoredSetupField(raw, "category");
+      const hasRoutine = hasStoredSetupField(raw, "routine");
+      const hasTotalMl = hasPositiveSetupNumber(raw.totalMl);
+      const hasPerUseMl = hasPositiveSetupNumber(raw.perUseMl);
+      return !hasCategory || !hasRoutine || !hasTotalMl || !hasPerUseMl;
+    }
+
+    function isProductSetupIncomplete(product) {
+      return Boolean(product && !isSampleProduct(product) && product.needsSetup === true);
+    }
+
     function normalizeProductData(raw = {}) {
       const createdAt = raw.createdAt || null;
       const startDate = isValidDateValue(raw.startDate)
@@ -602,6 +644,7 @@
         remain: normalizedRemain
       });
       const purchaseLinks = mergePurchaseLinks(raw.purchaseLinks, raw.buyLinks);
+      const needsSetup = shouldProductNeedSetup(raw);
 
       return {
         ...raw,
@@ -615,6 +658,8 @@
         usageStepPercent: normalizeUsageStepPercent(raw.usageStepPercent),
         routine,
         usageFrequencyPerDay,
+        needsSetup,
+        setupStatus: needsSetup ? "needs_setup" : (raw.setupStatus || "complete"),
         purchaseLinks,
         buyLinks: mergePurchaseLinks(raw.buyLinks, raw.purchaseLinks),
         startDate
@@ -1042,6 +1087,10 @@
       pendingProductCreation = false;
       isLandingTransitionRunning = false;
       historyFilterMode = "all";
+      productListSortMode = "today";
+      productListRoutineFilter = "all";
+      productAddMode = "single";
+      openProductSetupEditorId = "";
       hasPlayedTopCtaIntro = false;
       hasRevealedProductForm = false;
       hasEnteredPrimaryFlow = false;
@@ -1073,6 +1122,7 @@
       usageActionLockTimers.clear();
       pendingUsageProductIds.clear();
       pendingRoutineUpdateProductIds.clear();
+      pendingProductSetupProductIds.clear();
       renderedProgressPercentByProductId.clear();
       routineFeedbackExitTimers.forEach((timerId) => {
         clearTimeout(timerId);
@@ -1096,8 +1146,13 @@
       document.getElementById("productPerUseMl").value = "";
       document.getElementById("productRoutine").value = "morning";
       document.getElementById("productUsageFrequencyPerDay").value = "";
+      const quickProductNamesEl = document.getElementById("quickProductNames");
+      const quickAddRoutineEl = document.getElementById("quickAddRoutine");
+      if (quickProductNamesEl) quickProductNamesEl.value = "";
+      if (quickAddRoutineEl) quickAddRoutineEl.value = "morning";
       clearProductMlValidationErrors();
       resetProductFormTouchedFields();
+      setProductAddMode("single");
       setProductBrandFieldExpanded(false);
       setProductDetailsExpanded(false);
       updateRoutineFrequencyFieldVisibility();
@@ -1240,6 +1295,18 @@
       focusElementWithoutScroll(nameInput);
     }
 
+    function focusActiveProductAddInput() {
+      if (productAddMode === "quick") {
+        const quickTextareaEl = document.getElementById("quickProductNames");
+        if (quickTextareaEl && !quickTextareaEl.disabled) {
+          focusElementWithoutScroll(quickTextareaEl);
+          return;
+        }
+      }
+
+      focusProductNameInput();
+    }
+
     function shouldCollapseProductForm() {
       if (isDemoMode()) return true;
       return !hasRevealedProductForm;
@@ -1323,7 +1390,7 @@
           didRevealForm ? 260 : 0
         );
         window.setTimeout(() => {
-          focusProductNameInput();
+          focusActiveProductAddInput();
         }, focusDelay);
       };
 
@@ -1339,6 +1406,105 @@
 
     function scrollToProductFormSection(options = {}) {
       scrollToProductCreationForm(options);
+    }
+
+    function normalizeProductAddMode(mode) {
+      return mode === "quick" ? "quick" : "single";
+    }
+
+    function getQuickProductNames() {
+      const textareaEl = document.getElementById("quickProductNames");
+      if (!textareaEl) return [];
+
+      return textareaEl.value
+        .split(/[\n,]+/)
+        .map((name) => name.trim())
+        .filter(Boolean);
+    }
+
+    function getQuickAddRoutineValue() {
+      const routineEl = document.getElementById("quickAddRoutine");
+      return normalizeRoutineValue(routineEl?.value || "morning");
+    }
+
+    function updateQuickAddButtonState(productNames = getQuickProductNames()) {
+      const quickAddBtn = document.getElementById("quickAddProductsBtn");
+      const statusEl = document.getElementById("quickAddStatus");
+      const canWrite = getWriteUiEnabledState();
+      const productCount = productNames.length;
+      const isDisabled = !canWrite || productCount === 0 || pendingProductCreation;
+
+      if (quickAddBtn) {
+        quickAddBtn.disabled = isDisabled;
+        quickAddBtn.textContent = pendingProductCreation
+          ? "추가 중..."
+          : (productCount > 0 ? `${productCount}개 제품 추가` : "한 번에 추가");
+      }
+
+      if (statusEl) {
+        if (isDemoMode()) {
+          statusEl.textContent = "데모 모드에서는 화면이 고정됩니다";
+          statusEl.className = "product-form-status";
+        } else if (!canWrite) {
+          statusEl.textContent = "로그인 후 제품을 저장할 수 있어요";
+          statusEl.className = "product-form-status";
+        } else if (pendingProductCreation) {
+          statusEl.textContent = "제품을 추가하는 중이에요...";
+          statusEl.className = "product-form-status";
+        } else if (productCount === 0) {
+          statusEl.textContent = "제품명을 쉼표나 줄바꿈으로 입력하세요";
+          statusEl.className = "product-form-status";
+        } else {
+          statusEl.textContent = `${productCount}개 제품을 한 번에 추가할 수 있어요`;
+          statusEl.className = "product-form-status product-form-status--ready";
+        }
+      }
+
+      return productNames;
+    }
+
+    function setProductAddMode(mode, options = {}) {
+      const nextMode = normalizeProductAddMode(mode);
+      const isQuickMode = nextMode === "quick";
+      const singlePanelEl = document.getElementById("productInputContainer");
+      const quickPanelEl = document.getElementById("quickAddPanel");
+      const singleModeBtn = document.getElementById("singleAddModeBtn");
+      const quickModeBtn = document.getElementById("quickAddModeBtn");
+
+      productAddMode = nextMode;
+
+      if (singlePanelEl) {
+        singlePanelEl.classList.toggle("hidden", isQuickMode);
+        singlePanelEl.hidden = isQuickMode;
+        singlePanelEl.setAttribute("aria-hidden", isQuickMode ? "true" : "false");
+        singlePanelEl.inert = isQuickMode;
+      }
+      if (quickPanelEl) {
+        quickPanelEl.classList.toggle("hidden", !isQuickMode);
+        quickPanelEl.hidden = !isQuickMode;
+        quickPanelEl.setAttribute("aria-hidden", isQuickMode ? "false" : "true");
+        quickPanelEl.inert = !isQuickMode;
+      }
+
+      if (singleModeBtn) {
+        singleModeBtn.classList.toggle("product-add-mode-btn--active", !isQuickMode);
+        singleModeBtn.setAttribute("aria-selected", isQuickMode ? "false" : "true");
+        singleModeBtn.disabled = isDemoMode();
+      }
+      if (quickModeBtn) {
+        quickModeBtn.classList.toggle("product-add-mode-btn--active", isQuickMode);
+        quickModeBtn.setAttribute("aria-selected", isQuickMode ? "true" : "false");
+        quickModeBtn.disabled = isDemoMode();
+      }
+
+      updateAddProductButtonState();
+      updateQuickAddButtonState();
+
+      if (options.focus === true) {
+        window.setTimeout(() => {
+          focusActiveProductAddInput();
+        }, 0);
+      }
     }
 
     function scrollToRoutineSection(options = {}) {
@@ -3029,11 +3195,113 @@
       `;
     }
 
-    function createProductRowElement(product) {
+    function getProductSetupOptionsMarkup(options, selectedValue) {
+      return options
+        .map((option) => {
+          const isSelected = option.value === selectedValue;
+          return `<option value="${escapeHtml(option.value)}"${isSelected ? " selected" : ""}>${escapeHtml(option.label)}</option>`;
+        })
+        .join("");
+    }
+
+    function getProductSetupEditorMarkup(product) {
+      const productId = escapeHtml(product.id);
+      const categoryOptions = [
+        { value: "기타", label: "기타" },
+        { value: "토너", label: "토너" },
+        { value: "에센스", label: "에센스" },
+        { value: "세럼", label: "세럼" },
+        { value: "로션", label: "로션" },
+        { value: "크림", label: "크림" },
+        { value: "선크림", label: "선크림" },
+        { value: "바디로션", label: "바디로션" }
+      ];
+      const routineOptions = [
+        { value: "morning", label: "아침" },
+        { value: "night", label: "저녁" },
+        { value: "twice_daily", label: "하루 2회" },
+        { value: "flexible", label: "자유 사용" }
+      ];
+      const category = product.category || "기타";
+      const routine = normalizeRoutineValue(product.routine);
+
+      return `
+        <div class="product-setup-editor hidden" data-role="setupEditor" aria-hidden="true">
+          <div class="product-setup-editor-grid">
+            <label class="product-setup-field">
+              <span>카테고리</span>
+              <select class="product-setup-input" data-setup-field="category" data-product-id="${productId}">
+                ${getProductSetupOptionsMarkup(categoryOptions, category)}
+              </select>
+            </label>
+            <label class="product-setup-field">
+              <span>사용 루틴</span>
+              <select class="product-setup-input" data-setup-field="routine" data-product-id="${productId}">
+                ${getProductSetupOptionsMarkup(routineOptions, routine)}
+              </select>
+            </label>
+            <label class="product-setup-field">
+              <span>총 용량</span>
+              <div class="product-setup-input-with-unit">
+                <input
+                  class="product-setup-input"
+                  data-setup-field="totalMl"
+                  data-product-id="${productId}"
+                  type="number"
+                  min="5"
+                  step="0.1"
+                  inputmode="decimal"
+                  value="${escapeHtml(formatMlValue(product.totalMl || DEFAULT_TOTAL_ML))}"
+                />
+                <em>ml</em>
+              </div>
+            </label>
+            <label class="product-setup-field">
+              <span>1회 사용량</span>
+              <div class="product-setup-input-with-unit">
+                <input
+                  class="product-setup-input"
+                  data-setup-field="perUseMl"
+                  data-product-id="${productId}"
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  inputmode="decimal"
+                  value="${escapeHtml(formatMlValue(product.perUseMl || DEFAULT_PER_USE_ML))}"
+                />
+                <em>ml</em>
+              </div>
+            </label>
+          </div>
+          <p class="product-setup-error hidden" data-role="setupError" aria-live="polite"></p>
+          <div class="product-setup-editor-actions">
+            <button class="btn-secondary product-setup-cancel-btn" type="button" data-product-id="${productId}">나중에</button>
+            <button class="product-setup-save-btn" type="button" data-product-id="${productId}">설정 저장</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function createProductRowElement(product, options = {}) {
       const row = document.createElement("div");
       row.dataset.productId = product.id;
+      const routineGroup = options.routineGroup || "";
+      if (routineGroup) {
+        row.dataset.routineGroup = routineGroup;
+      }
 
       const name = product.brand ? `${product.name} (${product.brand})` : product.name;
+      const routineToggleMarkup = options.showRoutineToggle ? `
+        <label class="routine-product-check">
+          <input
+            class="routine-product-toggle"
+            type="checkbox"
+            data-product-id="${product.id}"
+            data-routine-group="${routineGroup}"
+          />
+          <span aria-hidden="true"></span>
+        </label>
+      ` : "";
       const routineActions = getRoutineActionItems(product.routine)
         .map((item) => `
           <div class="product-routine-row">
@@ -3052,15 +3320,25 @@
       row.innerHTML = `
         ${product.isSample ? `<span class="sample-product-badge sample-product-badge--card">체험용</span>` : ""}
         <div class="product-main">
-          <div class="product-title-row">
-            <strong>${name}</strong>
-            <span class="low-stock-badge hidden" data-role="depletionBadge"></span>
+          <div class="product-list-topline${options.showRoutineToggle ? " product-list-topline--checklist" : ""}">
+            ${routineToggleMarkup}
+            <div class="product-title-stack">
+              <div class="product-title-row">
+                <strong>${name}</strong>
+                <span class="low-stock-badge hidden" data-role="depletionBadge"></span>
+              </div>
+              <div class="meta">${product.category || "기타"} · ${getRoutineDisplayLabel(product.routine)}</div>
+            </div>
+            <span class="product-dday-chip product-dday-chip--list" data-role="depletionDday"></span>
           </div>
-          <div class="meta">${product.category || "기타"} · ${getRoutineDisplayLabel(product.routine)}</div>
           <div class="product-progress-block" aria-label="잔량 및 소진 예측">
             <div class="product-progress-header">
               <span class="product-progress-label" data-role="remainingText"></span>
               <strong class="product-progress-percent" data-role="remainingPercentText"></strong>
+            </div>
+            <div class="product-result-summary" aria-label="예상 소진 결과">
+              <span class="product-depletion-primary" data-role="depletionPrimary"></span>
+              <span class="product-depletion-date" data-role="depletionDate"></span>
             </div>
             <div
               class="progress-track"
@@ -3072,16 +3350,18 @@
             >
               <div class="progress-fill"></div>
             </div>
-            <div class="product-result-summary" aria-label="예상 소진 결과">
-              <span class="product-dday-chip" data-role="depletionDday"></span>
-              <span class="product-depletion-primary" data-role="depletionPrimary"></span>
-              <span class="product-depletion-date" data-role="depletionDate"></span>
-            </div>
           </div>
           <div class="product-today-status" data-role="todayRoutineStatus"></div>
-          <div class="product-routine-actions">
-            ${routineActions}
+          <div class="product-setup-prompt hidden" data-role="setupPrompt">
+            <div class="product-setup-prompt-copy">
+              <span class="product-setup-badge">⚠ 설정 필요</span>
+              <p>설정을 완료하면 소진 예측 정확도가 높아져요</p>
+            </div>
+            <button class="btn-secondary product-setup-open-btn" type="button" data-product-id="${product.id}">
+              설정 완료하기
+            </button>
           </div>
+          ${getProductSetupEditorMarkup(product)}
           <div class="product-routine-feedback hidden" data-role="routineFeedback" role="status" aria-live="polite"></div>
           <div class="depletion-hint hidden" data-role="depletionHint"></div>
           <div class="purchase-recommendation hidden" data-role="purchaseRecommendation">
@@ -3101,6 +3381,9 @@
           </div>
         </div>
         <div class="product-actions">
+          <div class="product-routine-actions">
+            ${routineActions}
+          </div>
           <div class="product-next-step-guide hidden" data-role="creationGuide" role="status" aria-live="polite">
             <div class="product-next-step-guide-title">${PRODUCT_CREATION_GUIDE_TITLE}</div>
             <div class="product-next-step-guide-desc">${PRODUCT_CREATION_GUIDE_DESC}</div>
@@ -3149,11 +3432,16 @@
       const routineFeedback = routineFeedbackByProductId.get(product.id) || null;
       const isRoutineFeedbackActive = Boolean(routineFeedback && !routineFeedback.isExiting);
       const isPriorityProduct = getPriorityProductByRemaining()?.id === product.id;
+      const needsSetup = isProductSetupIncomplete(product);
+      const isSetupEditorOpen = openProductSetupEditorId === product.id;
+      const productDisplayName = product.brand ? `${product.name} (${product.brand})` : (product.name || "제품");
 
       row.className = [
         "product-row",
         isSample ? "product-row--sample" : "",
         isPriorityProduct ? "product-row--priority" : "",
+        needsSetup ? "product-row--setup-needed" : "",
+        isSetupEditorOpen ? "product-row--setup-editing" : "",
         isRoutineFeedbackActive ? "product-row--routine-complete" : "",
         shouldShowCreationGuide ? "product-row--newly-added" : "",
         shouldHighlightRecentUse ? "product-row--recently-used" : ""
@@ -3174,7 +3462,12 @@
       const purchaseOptionsEl = row.querySelector('[data-role="purchaseOptions"]');
       const creationGuideEl = row.querySelector('[data-role="creationGuide"]');
       const routineFeedbackEl = row.querySelector('[data-role="routineFeedback"]');
+      const setupPromptEl = row.querySelector('[data-role="setupPrompt"]');
+      const setupEditorEl = row.querySelector('[data-role="setupEditor"]');
+      const setupOpenBtn = row.querySelector(".product-setup-open-btn");
+      const setupSaveBtn = row.querySelector(".product-setup-save-btn");
       const useProductBtn = row.querySelector(".use-product-btn");
+      const routineToggleEl = row.querySelector(".routine-product-toggle");
       const progressTrackEl = row.querySelector(".progress-track");
       const purchaseCtaBtn = row.querySelector(".purchase-cta-btn");
       const stopProductBtn = row.querySelector(".stop-product-btn");
@@ -3194,16 +3487,53 @@
       }
       if (todayRoutineStatusEl) {
         todayRoutineStatusEl.innerHTML = `
-          <div class="product-today-status-label">🔥 오늘 루틴 상태</div>
+          <div class="product-today-status-label">오늘 루틴</div>
           <div class="product-today-status-list">
             ${routineStatusItems.map((item) => `
               <span class="product-today-status-pill product-today-status-pill--${item.completed ? "done" : "pending"}">
-                ${item.label}: ${item.completed ? "완료" : "아직 안함"}
+                ${item.label} ${item.completed ? "완료" : "대기"}
               </span>
             `).join("")}
           </div>
           <div class="product-today-status-streak">${getProductRoutineStreakCopy(product)}</div>
         `;
+      }
+
+      if (setupPromptEl) {
+        setupPromptEl.classList.toggle("hidden", !needsSetup);
+        setupPromptEl.setAttribute("aria-hidden", needsSetup ? "false" : "true");
+      }
+      if (setupEditorEl) {
+        setupEditorEl.classList.toggle("hidden", !isSetupEditorOpen);
+        setupEditorEl.setAttribute("aria-hidden", isSetupEditorOpen ? "false" : "true");
+      }
+      if (setupOpenBtn) {
+        setupOpenBtn.disabled = !currentUser || isSample || pendingProductSetupProductIds.has(product.id);
+      }
+      if (setupSaveBtn) {
+        setupSaveBtn.disabled = !currentUser || isSample || pendingProductSetupProductIds.has(product.id);
+        setupSaveBtn.textContent = pendingProductSetupProductIds.has(product.id) ? "저장 중..." : "설정 저장";
+      }
+      if (routineToggleEl) {
+        const routineGroup = routineToggleEl.getAttribute("data-routine-group");
+        const isRoutineGroup = routineGroup === "morning" || routineGroup === "evening";
+        const isCompletedToday = Boolean(isRoutineGroup && todayUsageState[routineGroup]?.has(product.id));
+        const isLocked = isRoutineGroup && isUsageActionLocked(product.id, getUsageActionKey(routineGroup));
+        const canSelectForRoutine = Boolean(
+          currentUser
+          && isRoutineGroup
+          && !isSample
+          && !pendingUsageProductIds.has(product.id)
+          && !isCompletedToday
+          && !isLocked
+          && remainingMl > 0
+        );
+        routineToggleEl.disabled = !canSelectForRoutine;
+        routineToggleEl.checked = canSelectForRoutine;
+        routineToggleEl.setAttribute(
+          "aria-label",
+          `${productDisplayName} ${routineGroup === "morning" ? "아침" : "저녁"} 루틴에 포함`
+        );
       }
 
       if (badgeEl) {
@@ -3216,15 +3546,19 @@
           "low-stock-badge--critical",
           "low-stock-badge--done",
           "low-stock-badge--pending",
-          "low-stock-badge--priority"
+          "low-stock-badge--priority",
+          "low-stock-badge--setup"
         );
-        if (percent <= 10) {
+        if (needsSetup) {
+          badgeEl.textContent = "⚠ 설정 필요";
+          badgeEl.classList.add("low-stock-badge--setup");
+        } else if (percent <= 10) {
           badgeEl.textContent = "곧 소진";
           badgeEl.classList.add("low-stock-badge--critical");
         } else if (percent <= 20) {
           badgeEl.textContent = "곧 소진";
         } else if (isPriorityProduct) {
-          badgeEl.textContent = "우선 사용";
+          badgeEl.textContent = "오늘 우선";
           badgeEl.classList.add("low-stock-badge--priority");
         } else if (needsTodayRoutine) {
           badgeEl.textContent = "기록 필요";
@@ -3246,8 +3580,8 @@
       }
       if (ddayEl) {
         ddayEl.className = displayDaysLeft <= PURCHASE_URGENT_DAYS_THRESHOLD
-          ? "product-dday-chip product-dday-chip--urgent"
-          : "product-dday-chip";
+          ? "product-dday-chip product-dday-chip--list product-dday-chip--urgent"
+          : "product-dday-chip product-dday-chip--list";
         ddayEl.textContent = getProductDdayLabel(daysLeft);
       }
 
@@ -3375,9 +3709,12 @@
     function updateProductRowById(productId) {
       const product = activeProducts.find((item) => item.id === productId);
       if (!product) return;
-      const row = document.querySelector(`#activeProductList .product-row[data-product-id="${productId}"]`);
-      if (!row) return;
-      updateProductRowElement(row, product);
+      const rows = document.querySelectorAll(`#activeProductList .product-row[data-product-id="${productId}"]`);
+      if (!rows.length) return;
+      rows.forEach((row) => {
+        updateProductRowElement(row, product);
+      });
+      updateRoutineGroupActionStates();
     }
 
     function escapeHtml(value) {
@@ -3415,13 +3752,76 @@
       const products = getHomeDisplayProducts();
       if (!products.length) return [];
 
-      const focusProduct = getTodayFocusProduct(products);
-      if (!focusProduct) return products;
+      const filteredProducts = filterHomeProductListProducts(products);
+      return sortHomeProductListProducts(filteredProducts);
+    }
 
-      return [
-        focusProduct,
-        ...products.filter((product) => product.id !== focusProduct.id)
-      ];
+    function normalizeProductListSortMode(value) {
+      if (value === "depletion" || value === "today" || value === "name") return value;
+      return "today";
+    }
+
+    function normalizeProductListRoutineFilter(value) {
+      if (value === "morning" || value === "evening") return value;
+      return "all";
+    }
+
+    function filterHomeProductListProducts(products) {
+      const filterMode = normalizeProductListRoutineFilter(productListRoutineFilter);
+      if (filterMode === "all") return products;
+      return products.filter((product) => isProductInRoutine(product, filterMode));
+    }
+
+    function getProductListName(product) {
+      return String(product?.name || product?.brand || "제품").trim() || "제품";
+    }
+
+    function getTodayRecordNeedRank(product, usageState) {
+      const statusItems = getProductTodayRoutineStatusItems(product, usageState);
+      if (statusItems.some((item) => !item.completed)) return 0;
+      if (statusItems.length > 0) return 1;
+      return 2;
+    }
+
+    function compareProductsByDepletion(a, b) {
+      const aDaysLeft = calculateDaysLeft(a.product);
+      const bDaysLeft = calculateDaysLeft(b.product);
+      const safeADaysLeft = Number.isFinite(aDaysLeft) ? aDaysLeft : Number.MAX_SAFE_INTEGER;
+      const safeBDaysLeft = Number.isFinite(bDaysLeft) ? bDaysLeft : Number.MAX_SAFE_INTEGER;
+      if (safeADaysLeft !== safeBDaysLeft) return safeADaysLeft - safeBDaysLeft;
+
+      const aRemainingPercent = calculateRemainingPercent(a.product);
+      const bRemainingPercent = calculateRemainingPercent(b.product);
+      const safeARemainingPercent = Number.isFinite(aRemainingPercent) ? aRemainingPercent : Number.MAX_SAFE_INTEGER;
+      const safeBRemainingPercent = Number.isFinite(bRemainingPercent) ? bRemainingPercent : Number.MAX_SAFE_INTEGER;
+      if (safeARemainingPercent !== safeBRemainingPercent) {
+        return safeARemainingPercent - safeBRemainingPercent;
+      }
+
+      return a.index - b.index;
+    }
+
+    function sortHomeProductListProducts(products) {
+      const sortMode = normalizeProductListSortMode(productListSortMode);
+      const todayUsageState = buildTodayRoutineUsageState(recentUsageEvents);
+
+      return products
+        .map((product, index) => ({ product, index }))
+        .sort((a, b) => {
+          if (sortMode === "name") {
+            const nameCompare = getProductListName(a.product).localeCompare(getProductListName(b.product), "ko");
+            return nameCompare || a.index - b.index;
+          }
+
+          if (sortMode === "today") {
+            const aNeedRank = getTodayRecordNeedRank(a.product, todayUsageState);
+            const bNeedRank = getTodayRecordNeedRank(b.product, todayUsageState);
+            if (aNeedRank !== bNeedRank) return aNeedRank - bNeedRank;
+          }
+
+          return compareProductsByDepletion(a, b);
+        })
+        .map((item) => item.product);
     }
 
     function getVisibleHomeProductListProducts(products) {
@@ -3449,6 +3849,231 @@
           +${hiddenCount}개 더 보기
         </button>
       `;
+    }
+
+    function getRoutineProductGroupDefinitions() {
+      return [
+        {
+          id: "morning",
+          title: "🌞 아침 루틴",
+          helper: "아침에 함께 쓰는 제품",
+          buttonLabel: "아침 루틴 사용하기",
+          batchEnabled: true
+        },
+        {
+          id: "evening",
+          title: "🌙 저녁 루틴",
+          helper: "저녁에 함께 쓰는 제품",
+          buttonLabel: "저녁 루틴 사용하기",
+          batchEnabled: true
+        },
+        {
+          id: "flexible",
+          title: "자유 사용 제품",
+          helper: "필요할 때 개별로 기록하세요",
+          buttonLabel: "",
+          batchEnabled: false
+        }
+      ];
+    }
+
+    function getVisibleRoutineProductGroupDefinitions() {
+      const filterMode = normalizeProductListRoutineFilter(productListRoutineFilter);
+      if (filterMode === "morning") {
+        return getRoutineProductGroupDefinitions().filter((group) => group.id === "morning");
+      }
+      if (filterMode === "evening") {
+        return getRoutineProductGroupDefinitions().filter((group) => group.id === "evening");
+      }
+      return getRoutineProductGroupDefinitions();
+    }
+
+    function isFlexibleOnlyProduct(product) {
+      return !isProductInRoutine(product, "morning") && !isProductInRoutine(product, "evening");
+    }
+
+    function getProductsForRoutineGroup(products, groupId) {
+      if (groupId === "morning" || groupId === "evening") {
+        return products.filter((product) => isProductInRoutine(product, groupId));
+      }
+      return products.filter((product) => isFlexibleOnlyProduct(product));
+    }
+
+    function getRoutineGroupSummary(products, groupId, usageState = buildTodayRoutineUsageState(recentUsageEvents)) {
+      if (groupId !== "morning" && groupId !== "evening") {
+        return {
+          total: products.length,
+          completed: 0,
+          pending: products.length,
+          percent: 0,
+          isComplete: false
+        };
+      }
+
+      const actionableProducts = products.filter((product) => !isSampleProduct(product) && calculateRemainingMl(product) > 0);
+      const total = actionableProducts.length;
+      const completed = actionableProducts.filter((product) => usageState[groupId]?.has(product.id)).length;
+      const pending = Math.max(0, total - completed);
+      const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      return {
+        total,
+        completed,
+        pending,
+        percent,
+        isComplete: total > 0 && completed >= total
+      };
+    }
+
+    function createRoutineProductGroupElement(groupDef, products, usageState = buildTodayRoutineUsageState(recentUsageEvents)) {
+      const groupEl = document.createElement("section");
+      const summary = getRoutineGroupSummary(products, groupDef.id, usageState);
+      const groupId = escapeHtml(groupDef.id);
+      const statusText = groupDef.batchEnabled
+        ? (summary.total > 0 ? `${summary.completed}/${summary.total} 완료` : "제품 없음")
+        : `${products.length}개 제품`;
+      const actionMarkup = groupDef.batchEnabled ? `
+        <button
+          class="routine-group-use-btn"
+          type="button"
+          data-routine-group-use="${groupId}"
+        >
+          ${escapeHtml(groupDef.buttonLabel)}
+        </button>
+      ` : "";
+
+      groupEl.className = [
+        "routine-product-group",
+        `routine-product-group--${groupDef.id}`,
+        summary.isComplete ? "routine-product-group--done" : "",
+        summary.pending > 0 ? "routine-product-group--pending" : ""
+      ].filter(Boolean).join(" ");
+      groupEl.dataset.routineGroup = groupDef.id;
+      groupEl.innerHTML = `
+        <div class="routine-product-group-header">
+          <div class="routine-product-group-title-wrap">
+            <h4>${escapeHtml(groupDef.title)}</h4>
+            <p>${escapeHtml(groupDef.helper)}</p>
+          </div>
+          <div class="routine-product-group-status">
+            <strong data-role="routineGroupStatus">${escapeHtml(statusText)}</strong>
+            ${actionMarkup}
+          </div>
+        </div>
+        <div
+          class="routine-product-group-progress"
+          role="progressbar"
+          aria-label="${escapeHtml(groupDef.title)} 진행률"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow="${summary.percent}"
+        >
+          <span style="width: ${summary.percent}%"></span>
+        </div>
+        <div class="routine-product-checklist" data-role="routineProductList"></div>
+      `;
+      return groupEl;
+    }
+
+    function updateRoutineGroupActionState(groupEl) {
+      if (!groupEl) return;
+
+      const groupId = groupEl.dataset.routineGroup || "";
+      const groupDef = getRoutineProductGroupDefinitions().find((group) => group.id === groupId);
+      const actionBtn = groupEl.querySelector(".routine-group-use-btn");
+      const statusEl = groupEl.querySelector('[data-role="routineGroupStatus"]');
+      if (!groupDef?.batchEnabled || !actionBtn) return;
+
+      const products = Array.from(groupEl.querySelectorAll(".product-row"))
+        .map((row) => activeProducts.find((product) => product.id === row.getAttribute("data-product-id")))
+        .filter(Boolean);
+      const summary = getRoutineGroupSummary(products, groupId);
+      const selectableToggles = Array.from(groupEl.querySelectorAll(".routine-product-toggle"))
+        .filter((toggleEl) => !toggleEl.disabled);
+      const selectedCount = selectableToggles.filter((toggleEl) => toggleEl.checked).length;
+      const canWrite = getWriteUiEnabledState();
+      const isBusy = Boolean(pendingRoutineType) || isUsageActionLocked(null, getRoutineBatchActionKey(groupId));
+
+      if (statusEl) {
+        statusEl.textContent = summary.total > 0 ? `${summary.completed}/${summary.total} 완료` : "제품 없음";
+      }
+
+      actionBtn.disabled = !canWrite || isBusy || selectedCount === 0;
+      if (summary.isComplete) {
+        actionBtn.textContent = "오늘 완료";
+      } else if (selectedCount > 0) {
+        actionBtn.textContent = `${selectedCount}개 제품 루틴 사용하기`;
+      } else {
+        actionBtn.textContent = groupDef.buttonLabel;
+      }
+    }
+
+    function updateRoutineGroupActionStates() {
+      document.querySelectorAll(".routine-product-group").forEach((groupEl) => {
+        updateRoutineGroupActionState(groupEl);
+      });
+    }
+
+    function renderRoutineProductGroups(listEl, products) {
+      const usageState = buildTodayRoutineUsageState(recentUsageEvents);
+      let renderedGroupCount = 0;
+
+      getVisibleRoutineProductGroupDefinitions().forEach((groupDef) => {
+        const groupProducts = getProductsForRoutineGroup(products, groupDef.id);
+        if (groupProducts.length === 0) return;
+
+        const groupEl = createRoutineProductGroupElement(groupDef, groupProducts, usageState);
+        const groupListEl = groupEl.querySelector('[data-role="routineProductList"]');
+        groupProducts.forEach((product) => {
+          groupListEl.appendChild(createProductRowElement(product, {
+            routineGroup: groupDef.id,
+            showRoutineToggle: groupDef.batchEnabled
+          }));
+        });
+        listEl.appendChild(groupEl);
+        updateRoutineGroupActionState(groupEl);
+        renderedGroupCount += 1;
+      });
+
+      return renderedGroupCount;
+    }
+
+    function updateProductListControlsUI() {
+      const sortEl = document.getElementById("productListSort");
+      const safeSortMode = normalizeProductListSortMode(productListSortMode);
+      const safeFilterMode = normalizeProductListRoutineFilter(productListRoutineFilter);
+
+      if (sortEl) {
+        sortEl.value = safeSortMode;
+      }
+
+      document.querySelectorAll("[data-product-filter]").forEach((buttonEl) => {
+        const isActive = buttonEl.getAttribute("data-product-filter") === safeFilterMode;
+        buttonEl.classList.toggle("product-filter-btn--active", isActive);
+        buttonEl.setAttribute("aria-pressed", isActive ? "true" : "false");
+      });
+    }
+
+    function setProductListSortMode(mode) {
+      const nextMode = normalizeProductListSortMode(mode);
+      if (productListSortMode === nextMode) {
+        updateProductListControlsUI();
+        return;
+      }
+      productListSortMode = nextMode;
+      shouldShowAllHomeProducts = false;
+      renderActiveProductsList();
+    }
+
+    function setProductListRoutineFilter(filterMode) {
+      const nextFilterMode = normalizeProductListRoutineFilter(filterMode);
+      if (productListRoutineFilter === nextFilterMode) {
+        updateProductListControlsUI();
+        return;
+      }
+      productListRoutineFilter = nextFilterMode;
+      shouldShowAllHomeProducts = false;
+      renderActiveProductsList();
     }
 
     function getTodayPendingProductCount(products = getHomeDisplayProducts()) {
@@ -3503,20 +4128,23 @@
     function getHeroPriorityLabel(product) {
       if (!product) return "";
       return hasProductUsageToday(product)
-        ? "지금 가장 급한 제품"
-        : "지금 먼저 써야 할 제품";
+        ? "추가 사용했다면 지금 기록하세요"
+        : "오늘 이 제품 사용 기록하세요";
     }
 
     function getHeroActionUrgencyMessage(product) {
+      if (hasProductUsageToday(product)) {
+        return "방금 더 썼다면 기록해야 잔량과 D-day가 맞아요";
+      }
       const daysLeft = calculateDaysLeft(product);
       const displayDaysLeft = getDisplayDaysLeft(daysLeft);
       if (displayDaysLeft <= PURCHASE_URGENT_DAYS_THRESHOLD) {
-        return "오늘 기록 안 하면 예측이 틀어질 수 있어요";
+        return "지금 기록하지 않으면 예측 정확도가 떨어져요";
       }
       if (displayDaysLeft <= SOON_DEPLETION_DAYS_THRESHOLD) {
-        return "오늘 안 남기면 소진 타이밍을 놓칠 수 있어요";
+        return "오늘 기록해야 구매 타이밍을 놓치지 않아요";
       }
-      return "오늘 기록해야 다음 소진일이 정확해져요";
+      return "사용 직후 기록하면 남은 기간 계산이 바로 맞춰져요";
     }
 
     function getHomePriorityProduct(products = getHomeDisplayProducts()) {
@@ -3576,21 +4204,30 @@
 
       return `
         <article class="home-priority-card home-priority-card--${urgencyStatus}" data-product-id="${escapeHtml(product.id)}">
-          <div class="home-priority-kicker">${escapeHtml(productName)}</div>
+          <div class="home-priority-product">
+            <div class="home-priority-kicker">${escapeHtml(getHeroPriorityLabel(product))}</div>
+            <h4 class="home-priority-product-name">${escapeHtml(productName)}</h4>
+          </div>
           <div class="home-priority-action">
             <div class="home-priority-dday">${escapeHtml(getProductDdayLabel(daysLeft))}</div>
             <p class="home-priority-message">${escapeHtml(getHeroActionUrgencyMessage(product))}</p>
           </div>
-          <div
-            class="home-priority-progress ${progressTone.trackClass}"
-            role="progressbar"
-            aria-label="잔량"
-            aria-valuemin="0"
-            aria-valuemax="100"
-            aria-valuenow="${safeRemainingPercent}"
-            data-progress-key="home-priority-${escapeHtml(product.id)}"
-          >
-            <span class="progress-fill home-priority-progress-fill ${progressTone.fillClass}"></span>
+          <div class="home-priority-progress-block">
+            <div class="home-priority-progress-label">
+              <span>잔량 기준</span>
+              <strong>${safeRemainingPercent}% 남음</strong>
+            </div>
+            <div
+              class="home-priority-progress ${progressTone.trackClass}"
+              role="progressbar"
+              aria-label="잔량 ${safeRemainingPercent}%"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="${safeRemainingPercent}"
+              data-progress-key="home-priority-${escapeHtml(product.id)}"
+            >
+              <span class="progress-fill home-priority-progress-fill ${progressTone.fillClass}"></span>
+            </div>
           </div>
         </article>
       `;
@@ -4261,8 +4898,8 @@
         priorityLabel: "",
         text: "첫 제품",
         subtext: "D-day",
-        helperText: "",
-        buttonLabel: "첫 제품 등록하고 언제 끝나는지 확인하기",
+        helperText: "누르면 제품 추가 입력란으로 이동해요",
+        buttonLabel: "제품 추가하고 오늘 기록 시작하기",
         note: "",
         mode: "add-product",
         disabled: false
@@ -4272,11 +4909,11 @@
         const demoItem = getDemoModeSoonDepletionItems()[0] || LANDING_DEMO_DEPLETION_ITEMS[0];
         return {
           ...baseConfig,
-          priorityLabel: "지금 가장 급한 제품",
+          priorityLabel: "오늘 이 제품 사용 기록하세요",
           text: demoItem?.name || "수분 세럼",
           subtext: getSoonDepletionDdayLabel(demoItem?.daysLeft ?? 3),
-          helperText: "",
-          buttonLabel: "오늘 사용 기록하기",
+          helperText: "지금 누르면 사용 기록 흐름을 체험해요",
+          buttonLabel: "지금 사용 기록하기",
           mode: "demo"
         };
       }
@@ -4312,8 +4949,8 @@
         priorityLabel: getHeroPriorityLabel(priorityProduct),
         text: productName || "제품",
         subtext: getProductDdayLabel(daysLeft),
-        helperText: "",
-        buttonLabel: "오늘 사용 기록하기",
+        helperText: "지금 누르면 오늘 사용으로 기록되고 잔량과 D-day가 바로 업데이트돼요",
+        buttonLabel: "지금 사용 기록하기",
         mode: "routine",
         productId: priorityProduct.id,
         routineSession
@@ -4792,6 +5429,8 @@
         "productPerUseMl",
         "productRoutine",
         "productUsageFrequencyPerDay",
+        "quickProductNames",
+        "quickAddRoutine",
         "eventNote"
       ];
       guardedIds.forEach((id) => {
@@ -4806,6 +5445,9 @@
       if (productDetailsToggleBtn) {
         productDetailsToggleBtn.disabled = !canWrite;
       }
+      document.querySelectorAll("[data-product-add-mode]").forEach((btn) => {
+        btn.disabled = isDemoMode();
+      });
 
       document.querySelectorAll("[data-event-type]").forEach((btn) => {
         btn.disabled = !canWrite;
@@ -4834,6 +5476,33 @@
       document.querySelectorAll(".save-routine-btn").forEach((btn) => {
         const productId = btn.getAttribute("data-product-id");
         btn.disabled = !canWrite || pendingRoutineUpdateProductIds.has(productId) || Boolean(pendingRoutineType);
+      });
+      document.querySelectorAll(".product-setup-input").forEach((inputEl) => {
+        const productId = inputEl.getAttribute("data-product-id");
+        inputEl.disabled = !canWrite || pendingProductSetupProductIds.has(productId);
+      });
+      document.querySelectorAll(".product-setup-open-btn").forEach((btn) => {
+        const productId = btn.getAttribute("data-product-id");
+        const product = activeProducts.find((item) => item.id === productId);
+        btn.disabled = !canWrite || isSampleProduct(product) || pendingProductSetupProductIds.has(productId);
+      });
+      document.querySelectorAll(".product-setup-save-btn").forEach((btn) => {
+        const productId = btn.getAttribute("data-product-id");
+        btn.disabled = !canWrite || pendingProductSetupProductIds.has(productId);
+        btn.textContent = pendingProductSetupProductIds.has(productId) ? "저장 중..." : "설정 저장";
+      });
+      document.querySelectorAll(".routine-product-toggle").forEach((toggleEl) => {
+        const productId = toggleEl.getAttribute("data-product-id");
+        const routineType = toggleEl.getAttribute("data-routine-group");
+        const product = activeProducts.find((item) => item.id === productId);
+        const todayUsageState = buildTodayRoutineUsageState(recentUsageEvents);
+        const isCompletedToday = Boolean(routineType && todayUsageState[routineType]?.has(productId));
+        toggleEl.disabled = !canWrite
+          || isSampleProduct(product)
+          || pendingUsageProductIds.has(productId)
+          || isCompletedToday
+          || isUsageActionLocked(productId, getUsageActionKey(routineType))
+          || calculateRemainingMl(product) <= 0;
       });
       const todayUsageState = buildTodayRoutineUsageState(recentUsageEvents);
       document.querySelectorAll(".product-routine-use-btn").forEach((btn) => {
@@ -4878,8 +5547,10 @@
           || isUsageActionLocked(null, getRoutineBatchActionKey("evening"))
           || !hasEveningRoutineTargets;
       }
+      updateRoutineGroupActionStates();
 
       updateAddProductButtonState();
+      updateQuickAddButtonState();
       document.getElementById("writeGuard").classList.toggle("hidden", canWrite);
     }
 
@@ -5295,6 +5966,48 @@
       });
     }
 
+    function createProductPayload(options = {}) {
+      const routine = normalizeRoutineValue(options.routine || "morning");
+      const totalMl = getNormalizedTotalMlValue(options.totalMl);
+      const perUseMl = getNormalizedPerUseMlValue(options.perUseMl);
+      const usageFrequencyPerDay = normalizeUsageFrequencyPerDay(
+        options.usageFrequencyPerDay,
+        getRoutineDailyFrequency(routine)
+      );
+      const now = options.timestamp || firebase.firestore.FieldValue.serverTimestamp();
+
+      const payload = {
+        ownerId: currentUid,
+        name: String(options.name || "").trim(),
+        category: options.category || "기타",
+        brand: options.brand || null,
+        isActive: true,
+        totalMl,
+        perUseMl,
+        usageFrequencyPerDay,
+        remainingMl: totalMl,
+        remain: totalMl,
+        usePct: 1,
+        remainingPct: DEFAULT_REMAINING_PERCENT,
+        remainingPercent: DEFAULT_REMAINING_PERCENT,
+        usageStepPercent: DEFAULT_USAGE_STEP_PERCENT,
+        purchaseLinks: {
+          ...DEFAULT_PURCHASE_LINKS
+        },
+        routine,
+        startDate: now,
+        createdAt: now,
+        updatedAt: now
+      };
+
+      if (options.needsSetup === true) {
+        payload.needsSetup = true;
+        payload.setupStatus = "needs_setup";
+      }
+
+      return payload;
+    }
+
     async function addProduct() {
       const canWrite = ensureAuthenticatedForWrite();
       if (!canWrite || !currentUid) return;
@@ -5302,7 +6015,7 @@
 
       const addProductBtn = document.getElementById("addProductBtn");
       const brand = document.getElementById("productBrand").value.trim();
-      const category = document.getElementById("productCategory").value;
+      const selectedCategory = document.getElementById("productCategory").value;
       const routine = normalizeRoutineValue(document.getElementById("productRoutine").value);
       const validation = validateProductMlInputs();
 
@@ -5315,6 +6028,9 @@
       }
 
       const { name, totalMl, perUseMl, usageFrequencyPerDay } = validation;
+      const category = selectedCategory === "기타"
+        ? detectProductCategoryFromName(name, selectedCategory)
+        : selectedCategory;
       pendingProductCreation = true;
       updateAddProductButtonState(validation);
       triggerButtonPressEffect(addProductBtn, PRODUCT_ADD_BUTTON_PRESS_DURATION_MS);
@@ -5326,29 +6042,16 @@
       try {
         try {
           const now = firebase.firestore.FieldValue.serverTimestamp();
-          const productPayload = {
-            ownerId: currentUid,
+          const productPayload = createProductPayload({
             name,
             category,
             brand: brand || null,
-            isActive: true,
             totalMl,
             perUseMl,
             usageFrequencyPerDay,
-            remainingMl: totalMl,
-            remain: totalMl,
-            usePct: 1,
-            remainingPct: DEFAULT_REMAINING_PERCENT,
-            remainingPercent: DEFAULT_REMAINING_PERCENT,
-            usageStepPercent: DEFAULT_USAGE_STEP_PERCENT,
-            purchaseLinks: {
-              ...DEFAULT_PURCHASE_LINKS
-            },
             routine,
-            startDate: now,
-            createdAt: now,
-            updatedAt: now
-          };
+            timestamp: now
+          });
 
           const productRef = await getUserRef("products").add(productPayload);
           createdProductId = productRef.id;
@@ -5396,6 +6099,102 @@
       }
     }
 
+    async function addQuickProducts() {
+      const canWrite = ensureAuthenticatedForWrite();
+      if (!canWrite || !currentUid) return;
+      if (pendingProductCreation) return;
+
+      const quickAddBtn = document.getElementById("quickAddProductsBtn");
+      const productNames = updateQuickAddButtonState();
+      if (productNames.length === 0) {
+        showToast("제품명을 입력해주세요", "한 줄에 제품 하나씩 입력하세요", 1800);
+        const textareaEl = document.getElementById("quickProductNames");
+        if (textareaEl) textareaEl.focus();
+        return;
+      }
+
+      const routine = getQuickAddRoutineValue();
+      const usageFrequencyPerDay = getRoutineDailyFrequency(routine);
+      pendingProductCreation = true;
+      updateQuickAddButtonState(productNames);
+      updateAddProductButtonState();
+      triggerButtonPressEffect(quickAddBtn, PRODUCT_ADD_BUTTON_PRESS_DURATION_MS);
+      await new Promise((resolve) => {
+        setTimeout(resolve, PRODUCT_ADD_BUTTON_PRESS_DURATION_MS);
+      });
+
+      const createdProductIds = [];
+      try {
+        try {
+          let batch = db.batch();
+          let writeCount = 0;
+          const commitCurrentBatch = async () => {
+            if (writeCount === 0) return;
+            await batch.commit();
+            batch = db.batch();
+            writeCount = 0;
+          };
+
+          for (const productName of productNames) {
+            const now = firebase.firestore.FieldValue.serverTimestamp();
+            const productRef = getUserRef("products").doc();
+            const productPayload = createProductPayload({
+              name: productName,
+              category: detectProductCategoryFromName(productName),
+              routine,
+              totalMl: DEFAULT_TOTAL_ML,
+              perUseMl: DEFAULT_PER_USE_ML,
+              usageFrequencyPerDay,
+              timestamp: now,
+              needsSetup: true
+            });
+            const changeRef = getUserRef("productChanges").doc();
+
+            batch.set(productRef, productPayload);
+            batch.set(changeRef, {
+              type: "add",
+              productId: productRef.id,
+              note: "빠른 추가",
+              createdAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            writeCount += 2;
+            createdProductIds.push(productRef.id);
+
+            if (writeCount >= 480) {
+              await commitCurrentBatch();
+            }
+          }
+
+          await commitCurrentBatch();
+
+          writeStorageItem(SAMPLE_DISMISSED_STORAGE_KEY, "true");
+          markJustAddedFirstProduct();
+        } catch (error) {
+          if (isPermissionError(error)) {
+            showAuthMessage("로그인 상태를 확인해주세요. 권한 오류로 저장에 실패했습니다.");
+            return;
+          }
+          throw error;
+        }
+
+        const quickProductNamesEl = document.getElementById("quickProductNames");
+        if (quickProductNamesEl) quickProductNamesEl.value = "";
+        updateQuickAddButtonState([]);
+        showRecentProductCreationGuide(createdProductIds[0]);
+        await setActiveScreen("home");
+        await renderActiveProducts();
+        showToast(`${createdProductIds.length}개 제품이 추가되었습니다`, "홈에서 바로 확인해보세요", PRODUCT_ADD_SUCCESS_TOAST_DURATION_MS, {
+          variant: "success",
+          placement: "top"
+        });
+        await maybeShowFirstProductSuccessFlow(createdProductIds[0]);
+      } finally {
+        pendingProductCreation = false;
+        updateQuickAddButtonState();
+        updateAddProductButtonState();
+      }
+    }
+
     async function stopProduct(productId, name) {
       const canWrite = ensureAuthenticatedForWrite();
       if (!canWrite || !currentUid) return;
@@ -5423,6 +6222,166 @@
       }
 
       await renderActiveProducts();
+    }
+
+    function openProductSetupEditor(productId) {
+      const targetProduct = activeProducts.find((item) => item.id === productId);
+      if (!targetProduct || isSampleProduct(targetProduct)) return;
+
+      openProductSetupEditorId = productId;
+      renderActiveProductsList();
+      requestAnimationFrame(() => {
+        const row = document.querySelector(`#activeProductList .product-row[data-product-id="${productId}"]`);
+        const firstInput = row?.querySelector('[data-setup-field="category"]');
+        if (firstInput && typeof firstInput.focus === "function") {
+          firstInput.focus();
+        }
+      });
+    }
+
+    function closeProductSetupEditor(productId = openProductSetupEditorId) {
+      openProductSetupEditorId = "";
+      renderActiveProductsList();
+      if (!productId) return;
+
+      requestAnimationFrame(() => {
+        const row = document.querySelector(`#activeProductList .product-row[data-product-id="${productId}"]`);
+        const setupBtn = row?.querySelector(".product-setup-open-btn");
+        if (setupBtn && typeof setupBtn.focus === "function") {
+          setupBtn.focus();
+        }
+      });
+    }
+
+    function setProductSetupError(row, message = "") {
+      const errorEl = row?.querySelector('[data-role="setupError"]');
+      if (!errorEl) return;
+
+      errorEl.textContent = message;
+      errorEl.classList.toggle("hidden", !message);
+    }
+
+    function getProductSetupInputState(productId) {
+      const row = document.querySelector(`#activeProductList .product-row[data-product-id="${productId}"]`);
+      if (!row) return { isValid: false, error: "설정 영역을 찾지 못했어요" };
+
+      const categoryEl = row.querySelector('[data-setup-field="category"]');
+      const routineEl = row.querySelector('[data-setup-field="routine"]');
+      const totalMlEl = row.querySelector('[data-setup-field="totalMl"]');
+      const perUseMlEl = row.querySelector('[data-setup-field="perUseMl"]');
+      const category = String(categoryEl?.value || "기타").trim() || "기타";
+      const routine = normalizeRoutineValue(routineEl?.value || "morning");
+      const totalMlRaw = String(totalMlEl?.value || "").trim();
+      const perUseMlRaw = String(perUseMlEl?.value || "").trim();
+      const totalMlNumeric = Number(totalMlRaw);
+      const perUseMlNumeric = Number(perUseMlRaw);
+
+      if (!totalMlRaw || !Number.isFinite(totalMlNumeric) || totalMlNumeric < MIN_PRODUCT_TOTAL_ML) {
+        return {
+          isValid: false,
+          row,
+          firstInvalidEl: totalMlEl,
+          error: "총 용량은 5ml 이상으로 입력해주세요"
+        };
+      }
+
+      if (!perUseMlRaw || !Number.isFinite(perUseMlNumeric) || perUseMlNumeric <= 0) {
+        return {
+          isValid: false,
+          row,
+          firstInvalidEl: perUseMlEl,
+          error: "1회 사용량은 0보다 크게 입력해주세요"
+        };
+      }
+
+      if (perUseMlNumeric > totalMlNumeric) {
+        return {
+          isValid: false,
+          row,
+          firstInvalidEl: perUseMlEl,
+          error: "1회 사용량은 총 용량보다 작거나 같게 입력해주세요"
+        };
+      }
+
+      return {
+        isValid: true,
+        row,
+        category,
+        routine,
+        totalMl: normalizeMlAmount(totalMlNumeric),
+        perUseMl: normalizeMlAmount(perUseMlNumeric)
+      };
+    }
+
+    async function updateProductSetup(productId) {
+      const canWrite = ensureAuthenticatedForWrite();
+      if (!canWrite || !currentUid) return;
+
+      const targetProduct = activeProducts.find((item) => item.id === productId);
+      if (!targetProduct || isSampleProduct(targetProduct)) return;
+      if (pendingProductSetupProductIds.has(productId)) return;
+
+      const setupState = getProductSetupInputState(productId);
+      if (!setupState.isValid) {
+        setProductSetupError(setupState.row, setupState.error);
+        if (setupState.firstInvalidEl && typeof setupState.firstInvalidEl.focus === "function") {
+          setupState.firstInvalidEl.focus();
+        }
+        return;
+      }
+
+      setProductSetupError(setupState.row, "");
+      pendingProductSetupProductIds.add(productId);
+      setWriteUIEnabled(Boolean(currentUser));
+
+      try {
+        const remainingPercent = calculateRemainingPercent(targetProduct);
+        const nextRemainingMl = normalizeMlAmount(
+          clamp((setupState.totalMl * remainingPercent) / 100, 0, setupState.totalMl)
+        );
+        const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp();
+        const payload = {
+          category: setupState.category,
+          routine: setupState.routine,
+          totalMl: setupState.totalMl,
+          perUseMl: setupState.perUseMl,
+          usageFrequencyPerDay: getRoutineDailyFrequency(setupState.routine),
+          remainingMl: nextRemainingMl,
+          remain: nextRemainingMl,
+          remainingPct: remainingPercent,
+          remainingPercent,
+          usageStepPercent: normalizeUsageStepPercent((setupState.perUseMl / setupState.totalMl) * 100),
+          needsSetup: false,
+          setupStatus: "complete",
+          setupCompleted: true,
+          setupCompletedAt: serverTimestamp,
+          updatedAt: serverTimestamp
+        };
+
+        await getUserRef("products").doc(productId).update(payload);
+        await getUserRef("productChanges").add({
+          type: "setup",
+          productId,
+          note: "제품 설정 완료",
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        openProductSetupEditorId = "";
+        await renderActiveProducts();
+        showToast("설정이 저장되었습니다", "소진 예측 정확도가 높아졌어요", PRODUCT_ADD_SUCCESS_TOAST_DURATION_MS, {
+          variant: "success",
+          placement: "top"
+        });
+      } catch (error) {
+        if (isPermissionError(error)) {
+          showAuthMessage("권한 오류로 설정 저장에 실패했습니다. 다시 로그인 후 시도해주세요.");
+          return;
+        }
+        throw error;
+      } finally {
+        pendingProductSetupProductIds.delete(productId);
+        setWriteUIEnabled(Boolean(currentUser));
+      }
     }
 
     async function updateProductRoutine(productId, routine) {
@@ -5807,18 +6766,22 @@
       return successCount;
     }
 
-    async function completeRoutine(routineType) {
+    async function completeRoutine(routineType, selectedProductIds = null) {
       const canWrite = ensureAuthenticatedForWrite();
       if (!canWrite || !currentUid) return;
       const batchActionKey = getRoutineBatchActionKey(routineType);
       const perProductActionKey = getUsageActionKey(routineType);
       if (pendingRoutineType || isUsageActionLocked(null, batchActionKey)) return;
       const todayUsageState = buildTodayRoutineUsageState(recentUsageEvents);
+      const selectedProductIdSet = Array.isArray(selectedProductIds) && selectedProductIds.length > 0
+        ? new Set(selectedProductIds)
+        : null;
 
       const targetProductIds = activeProducts
         .filter((product) => {
           return !isSampleProduct(product)
             && isProductInRoutine(product, routineType)
+            && (!selectedProductIdSet || selectedProductIdSet.has(product.id))
             && !todayUsageState[routineType]?.has(product.id)
             && calculateRemainingMl(product) > 0;
         })
@@ -5828,7 +6791,9 @@
       });
 
       if (targetProductIds.length === 0) {
-        showAuthMessage("선택한 루틴에 해당하는 사용 가능한 제품이 없습니다.");
+        showAuthMessage(selectedProductIdSet
+          ? "선택한 제품 중 오늘 기록할 수 있는 제품이 없습니다."
+          : "선택한 루틴에 해당하는 사용 가능한 제품이 없습니다.");
         return;
       }
       if (eligibleProductIds.length === 0) {
@@ -5887,6 +6852,7 @@
     function renderActiveProductsList() {
       const listEl = document.getElementById("activeProductList");
       listEl.innerHTML = "";
+      updateProductListControlsUI();
       updateEmptyStateOnboarding();
       updateProductFormVisibility();
       updatePrimaryExperienceStage();
@@ -5936,13 +6902,18 @@
         return;
       }
 
-      visibleProducts.forEach((product) => {
-        const row = createProductRowElement(product);
-        listEl.appendChild(row);
-        if (recentProductCreationGuide?.productId === product.id) {
-          guidedProductRow = row;
-        }
-      });
+      const renderedGroupCount = renderRoutineProductGroups(listEl, visibleProducts);
+      if (renderedGroupCount === 0) {
+        listEl.innerHTML = "<p class='hint product-list-empty-note'>현재 표시할 루틴 제품이 없습니다.</p>";
+        renderProductDetailModal();
+        setWriteUIEnabled(Boolean(currentUser));
+        return;
+      }
+      if (recentProductCreationGuide?.productId) {
+        guidedProductRow = listEl.querySelector(
+          `.product-row[data-product-id="${recentProductCreationGuide.productId}"]`
+        );
+      }
       listEl.insertAdjacentHTML("beforeend", getProductListMoreActionMarkup(hiddenProductCount));
 
       renderProductDetailModal();
@@ -6211,6 +7182,45 @@
         return;
       }
 
+      const routineGroupUseBtn = target.closest("[data-routine-group-use]");
+      if (routineGroupUseBtn) {
+        const routineType = routineGroupUseBtn.getAttribute("data-routine-group-use");
+        const groupEl = routineGroupUseBtn.closest(".routine-product-group");
+        const selectedProductIds = Array.from(groupEl?.querySelectorAll(".routine-product-toggle:checked") || [])
+          .map((toggleEl) => toggleEl.getAttribute("data-product-id"))
+          .filter(Boolean);
+        if (selectedProductIds.length === 0) {
+          showToast("선택된 제품이 없어요", "기록할 제품을 체크해주세요", 1600, {
+            placement: "top"
+          });
+          return;
+        }
+        triggerButtonPressEffect(routineGroupUseBtn);
+        await completeRoutine(routineType, selectedProductIds);
+        return;
+      }
+
+      const setupOpenBtn = target.closest(".product-setup-open-btn");
+      if (setupOpenBtn) {
+        const id = setupOpenBtn.getAttribute("data-product-id");
+        openProductSetupEditor(id);
+        return;
+      }
+
+      const setupCancelBtn = target.closest(".product-setup-cancel-btn");
+      if (setupCancelBtn) {
+        const id = setupCancelBtn.getAttribute("data-product-id");
+        closeProductSetupEditor(id);
+        return;
+      }
+
+      const setupSaveBtn = target.closest(".product-setup-save-btn");
+      if (setupSaveBtn) {
+        const id = setupSaveBtn.getAttribute("data-product-id");
+        await updateProductSetup(id);
+        return;
+      }
+
       const stopBtn = target.closest(".stop-product-btn");
       if (stopBtn) {
         const id = stopBtn.getAttribute("data-product-id");
@@ -6282,6 +7292,24 @@
         }
         await applyUsageToProduct(id);
       }
+    }
+
+    function handleActiveProductListInput(event) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (!target.closest(".product-setup-input")) return;
+
+      const row = target.closest(".product-row");
+      setProductSetupError(row, "");
+    }
+
+    function handleActiveProductListChange(event) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const routineToggleEl = target.closest(".routine-product-toggle");
+      if (!routineToggleEl) return;
+
+      updateRoutineGroupActionState(routineToggleEl.closest(".routine-product-group"));
     }
 
     async function handleSoonDepletionListClick(event) {
@@ -6402,8 +7430,18 @@
       document.getElementById("historyFilterAllBtn").addEventListener("click", () => {
         setHistoryFilterMode("all");
       });
+      document.getElementById("productListSort")?.addEventListener("change", (event) => {
+        setProductListSortMode(event.target.value);
+      });
+      document.querySelectorAll("[data-product-filter]").forEach((buttonEl) => {
+        buttonEl.addEventListener("click", () => {
+          setProductListRoutineFilter(buttonEl.getAttribute("data-product-filter"));
+        });
+      });
 
       document.getElementById("activeProductList").addEventListener("click", handleActiveProductListClick);
+      document.getElementById("activeProductList").addEventListener("input", handleActiveProductListInput);
+      document.getElementById("activeProductList").addEventListener("change", handleActiveProductListChange);
       document.getElementById("soonDepletionList").addEventListener("click", handleSoonDepletionListClick);
       document.getElementById("todayStatusPrimaryCta")?.addEventListener("click", handleTodayStatusPrimaryCta);
       document.getElementById("productFormToggleBtn").addEventListener("click", () => {
@@ -6440,6 +7478,19 @@
           hideFirstProductSuccessModal();
         }
       });
+      document.getElementById("singleAddModeBtn")?.addEventListener("click", () => {
+        setProductAddMode("single", { focus: true });
+      });
+      document.getElementById("quickAddModeBtn")?.addEventListener("click", () => {
+        setProductAddMode("quick", { focus: true });
+      });
+      document.getElementById("quickProductNames")?.addEventListener("input", () => {
+        updateQuickAddButtonState();
+      });
+      document.getElementById("quickAddRoutine")?.addEventListener("change", () => {
+        updateQuickAddButtonState();
+      });
+      document.getElementById("quickAddProductsBtn")?.addEventListener("click", addQuickProducts);
       document.getElementById("addProductBtn").addEventListener("click", addProduct);
       document.getElementById("productEmptyStateCta").addEventListener("click", async () => {
         if (isDemoMode()) {
@@ -6527,6 +7578,7 @@
       });
       setProductBrandFieldExpanded(false);
       setProductDetailsExpanded(false);
+      setProductAddMode("single");
       updateRoutineFrequencyFieldVisibility();
       document.getElementById("completeMorningRoutineBtn").addEventListener("click", async () => {
         triggerButtonPressEffect(document.getElementById("completeMorningRoutineBtn"));
@@ -6658,7 +7710,10 @@
         isLoadingProductCollection = Boolean(user);
         isLoadingRecentUsageEvents = Boolean(user);
         hasRevealedProductForm = false;
+        productAddMode = "single";
+        openProductSetupEditorId = "";
         recentUsageEvents = [];
+        pendingProductSetupProductIds.clear();
         routineFeedbackExitTimers.forEach((timerId) => {
           clearTimeout(timerId);
         });
@@ -6671,6 +7726,11 @@
         hideProductDetailModal({ restoreFocus: false });
         closePurchaseOptionsModal({ restoreFocus: false });
         hideFirstProductSuccessModal({ restoreFocus: false });
+        const quickProductNamesEl = document.getElementById("quickProductNames");
+        const quickAddRoutineEl = document.getElementById("quickAddRoutine");
+        if (quickProductNamesEl) quickProductNamesEl.value = "";
+        if (quickAddRoutineEl) quickAddRoutineEl.value = "morning";
+        setProductAddMode("single");
         updateAuthUI(user);
         updateEmptyStateOnboarding();
         updateProductFormVisibility();
