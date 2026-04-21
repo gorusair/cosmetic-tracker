@@ -27,11 +27,34 @@
     const SOON_DEPLETION_DAYS_THRESHOLD = 30;
     const PURCHASE_WARNING_DAYS_THRESHOLD = 20;
     const PURCHASE_URGENT_DAYS_THRESHOLD = 7;
+    const DEFAULT_PURCHASE_LINKS = Object.freeze({
+      coupang: "",
+      naver: "",
+      oliveyoung: ""
+    });
+    const PURCHASE_PLATFORM_OPTIONS = Object.freeze([
+      Object.freeze({
+        id: "coupang",
+        label: "쿠팡",
+        searchBaseUrl: "https://www.coupang.com/np/search?q="
+      }),
+      Object.freeze({
+        id: "naver",
+        label: "네이버",
+        searchBaseUrl: "https://search.shopping.naver.com/search/all?query="
+      }),
+      Object.freeze({
+        id: "oliveyoung",
+        label: "올리브영",
+        searchBaseUrl: "https://www.oliveyoung.co.kr/store/search/getSearchMain.do?query="
+      })
+    ]);
     // Keep enough same-day usage logs in memory so the routine summary stays accurate without extra queries.
     const RECENT_LOG_FETCH_LIMIT = 100;
     const HISTORY_ENTRY_LIMIT = 30;
     const HISTORY_LOG_FETCH_LIMIT = 60;
     const PRODUCT_DETAIL_LOG_LIMIT = 6;
+    const HOME_PRODUCT_PREVIEW_LIMIT = 2;
     const ACTIVE_VIEW_STORAGE_KEY = "cosmeticTrackerActiveView";
     const ROUTINE_STREAK_STORAGE_KEY = "cosmeticTrackerRoutineStreak";
     const ROUTINE_DAILY_STREAK_STORAGE_KEY = "cosmeticTrackerDailyRoutineStreak";
@@ -202,6 +225,9 @@
     let openedPurchaseMenuProductId = null;
     let openedPurchaseMenuSection = "";
     let pendingPurchaseMenuFocusTarget = null;
+    let isPurchaseOptionsModalOpen = false;
+    let purchaseOptionsProductId = "";
+    let lastPurchaseOptionsFocusedElement = null;
     let openedTimelineActivityId = null;
     let toastHideTimer = null;
     let routineToastHideTimer = null;
@@ -232,6 +258,7 @@
     let hasRevealedProductForm = false;
     let hasRevealedProductDetails = false;
     let hasEnteredPrimaryFlow = false;
+    let shouldShowAllHomeProducts = false;
     let routineSectionHighlightTimer = null;
     let todayOverviewAnimationTimer = null;
     let usageStreakAnimationTimer = null;
@@ -526,6 +553,30 @@
       return normalizePercentValue(remainingSource, DEFAULT_REMAINING_PERCENT);
     }
 
+    function normalizePurchaseUrl(value) {
+      const url = String(value || "").trim();
+      return /^https?:\/\//i.test(url) ? url : "";
+    }
+
+    function normalizePurchaseLinks(rawLinks = {}) {
+      const links = rawLinks && typeof rawLinks === "object" ? rawLinks : {};
+      return {
+        coupang: normalizePurchaseUrl(links.coupang),
+        naver: normalizePurchaseUrl(links.naver),
+        oliveyoung: normalizePurchaseUrl(links.oliveyoung || links.oliveYoung)
+      };
+    }
+
+    function mergePurchaseLinks(primaryLinks = {}, fallbackLinks = {}) {
+      const primary = normalizePurchaseLinks(primaryLinks);
+      const fallback = normalizePurchaseLinks(fallbackLinks);
+      return {
+        coupang: primary.coupang || fallback.coupang,
+        naver: primary.naver || fallback.naver,
+        oliveyoung: primary.oliveyoung || fallback.oliveyoung
+      };
+    }
+
     function normalizeProductData(raw = {}) {
       const createdAt = raw.createdAt || null;
       const startDate = isValidDateValue(raw.startDate)
@@ -550,6 +601,7 @@
         perUseMl,
         remain: normalizedRemain
       });
+      const purchaseLinks = mergePurchaseLinks(raw.purchaseLinks, raw.buyLinks);
 
       return {
         ...raw,
@@ -563,6 +615,8 @@
         usageStepPercent: normalizeUsageStepPercent(raw.usageStepPercent),
         routine,
         usageFrequencyPerDay,
+        purchaseLinks,
+        buyLinks: mergePurchaseLinks(raw.buyLinks, raw.purchaseLinks),
         startDate
       };
     }
@@ -603,20 +657,66 @@
         && products.every((product) => isSampleProduct(product));
     }
 
+    function getProgressTone(percent) {
+      const safePct = normalizePercentValue(percent, 0);
+      if (safePct >= 70) {
+        return {
+          trackClass: "progress-track--safe",
+          fillClass: "progress-fill--safe",
+          textClass: "progress-text--safe"
+        };
+      }
+      if (safePct >= 30) {
+        return {
+          trackClass: "progress-track--warning",
+          fillClass: "progress-fill--warning",
+          textClass: "progress-text--warning"
+        };
+      }
+      return {
+        trackClass: "progress-track--danger",
+        fillClass: "progress-fill--danger",
+        textClass: "progress-text--danger"
+      };
+    }
+
+    function setProgressToneClasses(options = {}) {
+      const { trackEl, fillEl, textEl, percent } = options;
+      const tone = getProgressTone(percent);
+      const trackClasses = ["progress-track--safe", "progress-track--warning", "progress-track--danger"];
+      const fillClasses = [
+        "good",
+        "warning",
+        "danger",
+        "progress-fill--safe",
+        "progress-fill--warning",
+        "progress-fill--danger"
+      ];
+      const textClasses = ["progress-text--safe", "progress-text--warning", "progress-text--danger"];
+
+      if (trackEl) {
+        trackEl.classList.remove(...trackClasses);
+        trackEl.classList.add(tone.trackClass);
+      }
+      if (fillEl) {
+        fillEl.classList.remove(...fillClasses);
+        fillEl.classList.add(tone.fillClass);
+      }
+      if (textEl) {
+        textEl.classList.remove(...textClasses);
+        textEl.classList.add(tone.textClass);
+      }
+
+      return tone;
+    }
+
     function applyProgressBar(el, pct) {
       if (!el) return;
       const fillEl = el.querySelector(".progress-fill");
       if (!fillEl) return;
 
       const safePct = normalizePercentValue(pct, 0);
-      fillEl.classList.remove("good", "warning", "danger");
-      if (safePct > 50) {
-        fillEl.classList.add("good");
-      } else if (safePct >= 20) {
-        fillEl.classList.add("warning");
-      } else {
-        fillEl.classList.add("danger");
-      }
+      setProgressToneClasses({ trackEl: el, fillEl, percent: safePct });
 
       const progressKey = el.getAttribute("data-progress-key");
       if (progressKey) {
@@ -799,7 +899,7 @@
       const historyScreen = document.getElementById("historyScreen");
       const heroSectionEl = document.querySelector(".hero-section");
       const shouldGateToCta = shouldFocusFirstScreen();
-      const shouldShowHome = visible && (activeScreen === "home" || activeScreen === "history" || shouldGateToCta);
+      const shouldShowHome = visible && (activeScreen === "home" || shouldGateToCta);
       const shouldShowHistory = visible && activeScreen === "history" && !shouldGateToCta;
       const shouldShowHero = shouldShowHome && shouldGateToCta;
       if (homeScreen) {
@@ -934,6 +1034,9 @@
       openedPurchaseMenuProductId = null;
       openedPurchaseMenuSection = "";
       pendingPurchaseMenuFocusTarget = null;
+      isPurchaseOptionsModalOpen = false;
+      purchaseOptionsProductId = "";
+      lastPurchaseOptionsFocusedElement = null;
       openedTimelineActivityId = null;
       recentProductCreationGuide = null;
       pendingProductCreation = false;
@@ -1239,7 +1342,9 @@
     }
 
     function scrollToRoutineSection(options = {}) {
-      activateRecordWorkspace();
+      if (options.activateRecord !== false) {
+        activateRecordWorkspace();
+      }
       const shouldHighlight = options.highlight !== false;
       const routineSectionEl = document.getElementById("todayRoutineProgress");
       if (routineSectionEl) {
@@ -2836,6 +2941,8 @@
             type="button"
             class="${item.actionClassName}${item.isPurchaseMenuOpen ? " hidden" : ""}"
             data-product-id="${item.id}"
+            aria-haspopup="dialog"
+            aria-controls="purchaseOptionsModal"
             aria-expanded="${item.isPurchaseMenuOpen ? "true" : "false"}"
           >
             ${item.actionLabel}
@@ -2915,9 +3022,9 @@
               닫기
             </button>
           </div>
-          <button class="purchase-option-btn" data-marketplace="oliveyoung" data-product-id="${productId}">올리브영</button>
           <button class="purchase-option-btn" data-marketplace="coupang" data-product-id="${productId}">쿠팡</button>
-          <button class="purchase-option-btn" data-marketplace="naver" data-product-id="${productId}">네이버쇼핑</button>
+          <button class="purchase-option-btn" data-marketplace="naver" data-product-id="${productId}">네이버</button>
+          <button class="purchase-option-btn" data-marketplace="oliveyoung" data-product-id="${productId}">올리브영</button>
         </div>
       `;
     }
@@ -2950,8 +3057,27 @@
             <span class="low-stock-badge hidden" data-role="depletionBadge"></span>
           </div>
           <div class="meta">${product.category || "기타"} · ${getRoutineDisplayLabel(product.routine)}</div>
-          <div class="meta" data-role="remainingText"></div>
-          <div class="meta" data-role="remainingPercentText"></div>
+          <div class="product-progress-block" aria-label="잔량 및 소진 예측">
+            <div class="product-progress-header">
+              <span class="product-progress-label" data-role="remainingText"></span>
+              <strong class="product-progress-percent" data-role="remainingPercentText"></strong>
+            </div>
+            <div
+              class="progress-track"
+              role="progressbar"
+              aria-label="잔량"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              data-progress-key="${product.id}"
+            >
+              <div class="progress-fill"></div>
+            </div>
+            <div class="product-result-summary" aria-label="예상 소진 결과">
+              <span class="product-dday-chip" data-role="depletionDday"></span>
+              <span class="product-depletion-primary" data-role="depletionPrimary"></span>
+              <span class="product-depletion-date" data-role="depletionDate"></span>
+            </div>
+          </div>
           <div class="product-today-status" data-role="todayRoutineStatus"></div>
           <div class="product-routine-actions">
             ${routineActions}
@@ -2964,6 +3090,8 @@
             <button
               class="btn-secondary purchase-cta-btn"
               data-product-id="${product.id}"
+              aria-haspopup="dialog"
+              aria-controls="purchaseOptionsModal"
               aria-expanded="false"
             >
               지금 구매하기
@@ -2971,18 +3099,6 @@
             <div class="purchase-recommendation-note hidden" data-role="purchaseSupportNote"></div>
             ${getPurchaseOptionsMarkup(product.id, { dataRole: "purchaseOptions" })}
           </div>
-          <div
-            class="progress-track"
-            aria-label="잔량 막대"
-            data-progress-key="${product.id}"
-          >
-            <div class="progress-fill"></div>
-          </div>
-          <div class="product-result-summary" aria-label="예상 소진 결과">
-            <span class="product-dday-chip" data-role="depletionDday"></span>
-            <span class="product-depletion-primary" data-role="depletionPrimary"></span>
-          </div>
-          <div class="product-depletion-date" data-role="depletionDate"></div>
         </div>
         <div class="product-actions">
           <div class="product-next-step-guide hidden" data-role="creationGuide" role="status" aria-live="polite">
@@ -3032,10 +3148,12 @@
       const routineStatusItems = getProductTodayRoutineStatusItems(product, todayUsageState);
       const routineFeedback = routineFeedbackByProductId.get(product.id) || null;
       const isRoutineFeedbackActive = Boolean(routineFeedback && !routineFeedback.isExiting);
+      const isPriorityProduct = getPriorityProductByRemaining()?.id === product.id;
 
       row.className = [
         "product-row",
         isSample ? "product-row--sample" : "",
+        isPriorityProduct ? "product-row--priority" : "",
         isRoutineFeedbackActive ? "product-row--routine-complete" : "",
         shouldShowCreationGuide ? "product-row--newly-added" : "",
         shouldHighlightRecentUse ? "product-row--recently-used" : ""
@@ -3066,10 +3184,13 @@
       const isSafePurchaseState = purchaseCopy.status === "safe";
 
       if (remainingTextEl) {
-        remainingTextEl.textContent = `잔량 ${formatMlValue(remainingMl)}ml / ${formatMlValue(totalMl)}ml`;
+        remainingTextEl.textContent = totalMl > 0
+          ? `잔량 ${formatMlValue(remainingMl)}ml / ${formatMlValue(totalMl)}ml`
+          : `잔량 ${formatMlValue(remainingMl)}ml`;
       }
       if (percentTextEl) {
-        percentTextEl.textContent = `(${remainingPercent}%)`;
+        percentTextEl.textContent = `${remainingPercent}%`;
+        setProgressToneClasses({ textEl: percentTextEl, percent: remainingPercent });
       }
       if (todayRoutineStatusEl) {
         todayRoutineStatusEl.innerHTML = `
@@ -3094,13 +3215,17 @@
           "hidden",
           "low-stock-badge--critical",
           "low-stock-badge--done",
-          "low-stock-badge--pending"
+          "low-stock-badge--pending",
+          "low-stock-badge--priority"
         );
         if (percent <= 10) {
-          badgeEl.textContent = "🔥 곧 소진";
+          badgeEl.textContent = "곧 소진";
           badgeEl.classList.add("low-stock-badge--critical");
         } else if (percent <= 20) {
-          badgeEl.textContent = "🔥 곧 소진";
+          badgeEl.textContent = "곧 소진";
+        } else if (isPriorityProduct) {
+          badgeEl.textContent = "우선 사용";
+          badgeEl.classList.add("low-stock-badge--priority");
         } else if (needsTodayRoutine) {
           badgeEl.textContent = "기록 필요";
           badgeEl.classList.add("low-stock-badge--pending");
@@ -3127,7 +3252,7 @@
       }
 
       if (dateEl) {
-        dateEl.textContent = `예상 소진일: ${estimatedDepletionDate}`;
+        dateEl.textContent = `예상 소진일 ${estimatedDepletionDate}`;
         dateEl.classList.toggle("product-depletion-date--spotlight", shouldHighlightRecentUse);
       }
 
@@ -3241,6 +3366,7 @@
 
       if (progressTrackEl) {
         progressTrackEl.classList.toggle("progress-track--routine-updated", isRoutineFeedbackActive);
+        progressTrackEl.setAttribute("aria-valuenow", String(remainingPercent));
       }
 
       applyProgressBar(progressTrackEl, remainingPercent);
@@ -3262,6 +3388,67 @@
 
     function getHomeDisplayProducts() {
       return activeProducts.filter((product) => isDemoMode() || !isSampleProduct(product));
+    }
+
+    function getPriorityProductByRemaining(products = getHomeDisplayProducts()) {
+      if (!products.length) return null;
+
+      return products
+        .map((product, index) => {
+          const remainingPercent = calculateRemainingPercent(product);
+          const daysLeft = calculateDaysLeft(product);
+          return {
+            product,
+            index,
+            remainingPercent: Number.isFinite(remainingPercent) ? remainingPercent : Number.MAX_SAFE_INTEGER,
+            daysLeft: Number.isFinite(daysLeft) ? daysLeft : Number.MAX_SAFE_INTEGER
+          };
+        })
+        .sort((a, b) => {
+          if (a.remainingPercent !== b.remainingPercent) return a.remainingPercent - b.remainingPercent;
+          if (a.daysLeft !== b.daysLeft) return a.daysLeft - b.daysLeft;
+          return a.index - b.index;
+        })[0]?.product || null;
+    }
+
+    function getHomeProductListProducts() {
+      const products = getHomeDisplayProducts();
+      if (!products.length) return [];
+
+      const focusProduct = getTodayFocusProduct(products);
+      if (!focusProduct) return products;
+
+      return [
+        focusProduct,
+        ...products.filter((product) => product.id !== focusProduct.id)
+      ];
+    }
+
+    function getVisibleHomeProductListProducts(products) {
+      if (shouldShowAllHomeProducts || products.length <= HOME_PRODUCT_PREVIEW_LIMIT) {
+        return products;
+      }
+
+      let previewProducts = products.slice(0, HOME_PRODUCT_PREVIEW_LIMIT);
+      const guidedProductId = recentProductCreationGuide?.productId || "";
+      if (guidedProductId && !previewProducts.some((product) => product.id === guidedProductId)) {
+        const guidedProduct = products.find((product) => product.id === guidedProductId);
+        if (guidedProduct) {
+          previewProducts = [...previewProducts.slice(0, HOME_PRODUCT_PREVIEW_LIMIT - 1), guidedProduct];
+        }
+      }
+
+      return previewProducts;
+    }
+
+    function getProductListMoreActionMarkup(hiddenCount) {
+      if (hiddenCount <= 0) return "";
+
+      return `
+        <button class="product-list-more-btn" type="button" data-product-list-action="show-all">
+          +${hiddenCount}개 더 보기
+        </button>
+      `;
     }
 
     function getTodayPendingProductCount(products = getHomeDisplayProducts()) {
@@ -3320,6 +3507,18 @@
         : "지금 먼저 써야 할 제품";
     }
 
+    function getHeroActionUrgencyMessage(product) {
+      const daysLeft = calculateDaysLeft(product);
+      const displayDaysLeft = getDisplayDaysLeft(daysLeft);
+      if (displayDaysLeft <= PURCHASE_URGENT_DAYS_THRESHOLD) {
+        return "오늘 기록 안 하면 예측이 틀어질 수 있어요";
+      }
+      if (displayDaysLeft <= SOON_DEPLETION_DAYS_THRESHOLD) {
+        return "오늘 안 남기면 소진 타이밍을 놓칠 수 있어요";
+      }
+      return "오늘 기록해야 다음 소진일이 정확해져요";
+    }
+
     function getHomePriorityProduct(products = getHomeDisplayProducts()) {
       if (!products.length) return null;
 
@@ -3359,62 +3558,40 @@
     function getHomePriorityEmptyMarkup() {
       return `
         <article class="home-priority-card home-priority-card--empty">
-          <div class="home-priority-kicker">첫 행동</div>
           <h4>첫 제품을 추가하면 홈이 자동으로 채워집니다</h4>
-          <p>소진일, 남은량, 구매 타이밍을 계산하려면 제품 1개만 먼저 등록하세요.</p>
-          <button class="home-priority-cta" type="button" data-home-priority-action="add-product">
-            첫 제품 추가하기
-          </button>
+          <p class="home-priority-empty-copy">제품 1개만 등록하면 남은량과 예상 소진일을 바로 계산해드려요.</p>
         </article>
       `;
     }
 
     function getHomePriorityProductMarkup(product) {
       const daysLeft = calculateDaysLeft(product);
-      const displayDaysLeft = getDisplayDaysLeft(daysLeft);
-      const remainingMl = calculateRemainingMl(product);
-      const totalMl = Number.isFinite(Number(product.totalMl)) && Number(product.totalMl) > 0
-        ? Number(product.totalMl)
-        : 0;
-      const rawRemainingPercent = calculateRemainingPercent(product);
-      const remainingPercent = Number.isFinite(rawRemainingPercent)
-        ? Math.round(rawRemainingPercent)
-        : 0;
       const urgencyStatus = getSoonDepletionVisualState(daysLeft);
       const productName = product.brand ? `${product.name} (${product.brand})` : product.name;
-      const sessionType = getPriorityProductRoutineSession(product);
-      const ctaLabel = sessionType ? "오늘 사용 기록하기" : "오늘 사용 기록하기";
+      const remainingPercent = Math.round(calculateRemainingPercent(product));
+      const safeRemainingPercent = Number.isFinite(remainingPercent)
+        ? Math.max(0, Math.min(100, remainingPercent))
+        : 0;
+      const progressTone = getProgressTone(safeRemainingPercent);
 
       return `
         <article class="home-priority-card home-priority-card--${urgencyStatus}" data-product-id="${escapeHtml(product.id)}">
-          <div class="home-priority-kicker">${escapeHtml(getHeroPriorityLabel(product))}</div>
-          <div class="home-priority-main">
-            <div>
-              <h4>${escapeHtml(productName)}</h4>
-              <p class="home-priority-message">${escapeHtml(getSoonDepletionUrgencyMessage(daysLeft))}</p>
-            </div>
+          <div class="home-priority-kicker">${escapeHtml(productName)}</div>
+          <div class="home-priority-action">
             <div class="home-priority-dday">${escapeHtml(getProductDdayLabel(daysLeft))}</div>
+            <p class="home-priority-message">${escapeHtml(getHeroActionUrgencyMessage(product))}</p>
           </div>
-          <div class="home-priority-metrics">
-            <span>남은량 ${formatMlValue(remainingMl)}ml / ${formatMlValue(totalMl)}ml</span>
-            <strong>${remainingPercent}%</strong>
-          </div>
-          <div class="home-priority-progress" aria-label="잔량 진행률">
-            <span style="width: ${Math.max(0, Math.min(100, remainingPercent))}%"></span>
-          </div>
-          <div class="home-priority-meta">
-            <span>${escapeHtml(getSoonDepletionRemainingText(daysLeft))}</span>
-            <span>예상 소진일 ${escapeHtml(formatEstimatedDepletionDate(daysLeft))}</span>
-          </div>
-          <button
-            class="home-priority-cta"
-            type="button"
-            data-home-priority-action="use-product"
-            data-product-id="${escapeHtml(product.id)}"
-            data-routine-session="${escapeHtml(sessionType)}"
+          <div
+            class="home-priority-progress ${progressTone.trackClass}"
+            role="progressbar"
+            aria-label="잔량"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="${safeRemainingPercent}"
+            data-progress-key="home-priority-${escapeHtml(product.id)}"
           >
-            ${ctaLabel}
-          </button>
+            <span class="progress-fill home-priority-progress-fill ${progressTone.fillClass}"></span>
+          </div>
         </article>
       `;
     }
@@ -3438,6 +3615,10 @@
       }
 
       listEl.innerHTML = getHomePriorityProductMarkup(priorityProduct);
+      const priorityProgressEl = listEl.querySelector(".home-priority-progress");
+      if (priorityProgressEl) {
+        applyProgressBar(priorityProgressEl, priorityProgressEl.getAttribute("aria-valuenow"));
+      }
       if (noteEl) {
         noteEl.textContent = "사용 기록을 남기면 잔량과 D-day가 홈에서 바로 다시 계산됩니다";
       }
@@ -3487,12 +3668,24 @@
       ctaBtn.disabled = Boolean(config.disabled);
     }
 
-    function handleTodayStatusPrimaryCta() {
+    async function logPriorityProductFromHome() {
+      const priorityProduct = getTodayFocusProduct();
+      if (!priorityProduct) return false;
+
+      const routineSession = getPriorityProductRoutineSession(priorityProduct);
+      if (routineSession) {
+        return runRoutine(priorityProduct.id, routineSession);
+      }
+
+      return applyUsageToProduct(priorityProduct.id);
+    }
+
+    async function handleTodayStatusPrimaryCta() {
       const config = getTodayStatusCtaConfig();
       if (config.disabled) return;
 
       if (config.action === "routine") {
-        scrollToRoutineSection({ highlight: true });
+        await logPriorityProductFromHome();
         return;
       }
 
@@ -3552,17 +3745,123 @@
       return lowByPercent || lowByDate;
     }
 
+    function getPurchasePlatformOption(marketplace) {
+      return PURCHASE_PLATFORM_OPTIONS.find((option) => option.id === marketplace) || null;
+    }
+
+    function buildPurchaseSearchUrl(marketplace, productName) {
+      const option = getPurchasePlatformOption(marketplace);
+      const safeProductName = String(productName || "제품").trim() || "제품";
+      return option ? `${option.searchBaseUrl}${encodeURIComponent(safeProductName)}` : "";
+    }
+
+    function getProductPurchaseLinks(product) {
+      return mergePurchaseLinks(product?.purchaseLinks, product?.buyLinks);
+    }
+
+    function getProductPurchaseLink(product, marketplace) {
+      if (!product || !getPurchasePlatformOption(marketplace)) return "";
+
+      const purchaseLinks = getProductPurchaseLinks(product);
+      return purchaseLinks[marketplace] || buildPurchaseSearchUrl(marketplace, product.name);
+    }
+
+    function setPurchaseOptionsModalVisibility(isVisible) {
+      const modalBackdrop = document.getElementById("purchaseOptionsModal");
+      if (!modalBackdrop) return;
+
+      modalBackdrop.classList.toggle("hidden", !isVisible);
+      modalBackdrop.setAttribute("aria-hidden", isVisible ? "false" : "true");
+      modalBackdrop.hidden = !isVisible;
+      if (isVisible) {
+        modalBackdrop.removeAttribute("inert");
+      } else {
+        modalBackdrop.setAttribute("inert", "");
+      }
+    }
+
+    function renderPurchaseOptionsModal() {
+      const modalBackdrop = document.getElementById("purchaseOptionsModal");
+      const productNameEl = document.getElementById("purchaseOptionsProductName");
+      const actionsEl = document.getElementById("purchaseOptionsModalActions");
+      if (!modalBackdrop || !productNameEl || !actionsEl) return;
+
+      const product = activeProducts.find((item) => item.id === purchaseOptionsProductId);
+      if (!isPurchaseOptionsModalOpen || !product) {
+        setPurchaseOptionsModalVisibility(false);
+        return;
+      }
+
+      productNameEl.textContent = product.name || "제품";
+      PURCHASE_PLATFORM_OPTIONS.forEach((option) => {
+        const buttonEl = actionsEl.querySelector(`[data-purchase-modal-marketplace="${option.id}"]`);
+        if (!buttonEl) return;
+
+        const purchaseUrl = getProductPurchaseLink(product, option.id);
+        buttonEl.textContent = option.label;
+        buttonEl.disabled = !purchaseUrl;
+      });
+      setPurchaseOptionsModalVisibility(true);
+    }
+
+    function openPurchaseOptionsModal(productId) {
+      if (isDemoMode()) {
+        showDemoModeLockedToast("데모 모드에서는 구매 동작도 고정됩니다.");
+        return;
+      }
+
+      const product = activeProducts.find((item) => item.id === productId);
+      if (!product) return;
+
+      openedPurchaseMenuProductId = null;
+      openedPurchaseMenuSection = "";
+      pendingPurchaseMenuFocusTarget = null;
+      lastPurchaseOptionsFocusedElement = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+      purchaseOptionsProductId = product.id;
+      isPurchaseOptionsModalOpen = true;
+      renderPurchaseOptionsModal();
+
+      requestAnimationFrame(() => {
+        const modalCard = document.querySelector("#purchaseOptionsModal .modal-card");
+        if (modalCard) focusElementWithoutScroll(modalCard);
+      });
+    }
+
+    function closePurchaseOptionsModal(options = {}) {
+      const shouldRestoreFocus = options.restoreFocus !== false;
+      isPurchaseOptionsModalOpen = false;
+      purchaseOptionsProductId = "";
+      setPurchaseOptionsModalVisibility(false);
+
+      if (shouldRestoreFocus && lastPurchaseOptionsFocusedElement?.isConnected) {
+        focusElementWithoutScroll(lastPurchaseOptionsFocusedElement);
+      }
+      lastPurchaseOptionsFocusedElement = null;
+    }
+
+    function onPurchaseOptionsKeydown(event) {
+      if (!isPurchaseOptionsModalOpen) return;
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closePurchaseOptionsModal();
+        return;
+      }
+
+      if (event.key === "Tab") {
+        trapFocusInModal("#purchaseOptionsModal .modal-card", event);
+      }
+    }
+
     function togglePurchaseMenu(productId, options = {}) {
       if (!productId) return;
-      const section = options.section === "soonDepletion" ? "soonDepletion" : "activeProductList";
-      const shouldOpenMenu = openedPurchaseMenuProductId !== productId || openedPurchaseMenuSection !== section;
-
-      openedPurchaseMenuProductId = shouldOpenMenu ? productId : null;
-      openedPurchaseMenuSection = shouldOpenMenu ? section : "";
-      pendingPurchaseMenuFocusTarget = shouldOpenMenu
-        ? { productId, section, target: "option" }
-        : (options.restoreCtaFocus ? { productId, section, target: "cta" } : null);
-      renderActiveProductsList();
+      if (options.restoreCtaFocus && isPurchaseOptionsModalOpen && purchaseOptionsProductId === productId) {
+        closePurchaseOptionsModal();
+        return;
+      }
+      openPurchaseOptionsModal(productId);
     }
 
     async function handlePurchaseOptionSelection(productId, marketplace) {
@@ -3574,19 +3873,24 @@
       const product = activeProducts.find((item) => item.id === productId);
       if (!product) return;
 
-      const purchaseHandler = window.purchaseTracking?.handlePurchase;
-      if (typeof purchaseHandler !== "function") {
-        console.error("purchaseTracking.handlePurchase is not available");
-        showToast("구매 준비 중이에요", "잠시 후 다시 시도해주세요.", 1600);
+      const url = getProductPurchaseLink(product, marketplace);
+      if (!url) {
+        showToast("구매 링크를 준비하지 못했어요", "제품명을 확인해주세요.", 1600);
         return;
       }
 
       openedPurchaseMenuProductId = null;
       openedPurchaseMenuSection = "";
       pendingPurchaseMenuFocusTarget = null;
-      renderActiveProductsList();
 
-      await purchaseHandler(product, marketplace, currentUser);
+      window.open(url, "_blank");
+      closePurchaseOptionsModal({ restoreFocus: false });
+
+      const trackingHandler = window.purchaseTracking?.trackPurchaseClick;
+      if (typeof trackingHandler === "function") {
+        const trackingUserId = currentUser?.uid || currentUid || "anonymous";
+        void trackingHandler(product, marketplace, trackingUserId);
+      }
     }
 
     function focusPurchaseMenuIfNeeded() {
@@ -3957,7 +4261,8 @@
         priorityLabel: "",
         text: "첫 제품",
         subtext: "D-day",
-        buttonLabel: "오늘 사용 기록하기",
+        helperText: "",
+        buttonLabel: "첫 제품 등록하고 언제 끝나는지 확인하기",
         note: "",
         mode: "add-product",
         disabled: false
@@ -3970,6 +4275,8 @@
           priorityLabel: "지금 가장 급한 제품",
           text: demoItem?.name || "수분 세럼",
           subtext: getSoonDepletionDdayLabel(demoItem?.daysLeft ?? 3),
+          helperText: "",
+          buttonLabel: "오늘 사용 기록하기",
           mode: "demo"
         };
       }
@@ -3979,6 +4286,8 @@
           ...baseConfig,
           text: "불러오는 중",
           subtext: "D-day",
+          helperText: "",
+          buttonLabel: "소진일 예측 불러오는 중",
           disabled: true
         };
       }
@@ -4003,6 +4312,8 @@
         priorityLabel: getHeroPriorityLabel(priorityProduct),
         text: productName || "제품",
         subtext: getProductDdayLabel(daysLeft),
+        helperText: "",
+        buttonLabel: "오늘 사용 기록하기",
         mode: "routine",
         productId: priorityProduct.id,
         routineSession
@@ -4014,9 +4325,10 @@
       const labelEl = document.getElementById("topCtaLabel");
       const textEl = document.getElementById("topCtaText");
       const subtextEl = document.getElementById("topCtaSubtext");
+      const helperEl = document.getElementById("topCtaHelper");
       const noteEl = document.getElementById("topCtaNote");
       const ctaBtn = document.getElementById("cta-btn");
-      if (!reminderEl || !textEl || !subtextEl || !noteEl || !ctaBtn) return;
+      if (!reminderEl || !ctaBtn) return;
 
       const ctaConfig = getTopCtaConfig();
       reminderEl.classList.remove("hidden");
@@ -4026,12 +4338,28 @@
         labelEl.textContent = ctaConfig.priorityLabel || "";
         labelEl.classList.toggle("hidden", !ctaConfig.priorityLabel);
       }
-      textEl.textContent = ctaConfig.text;
-      subtextEl.textContent = ctaConfig.subtext;
+      if (textEl) {
+        textEl.textContent = ctaConfig.text;
+      }
+      if (subtextEl) {
+        subtextEl.textContent = ctaConfig.subtext;
+      }
+      if (helperEl) {
+        helperEl.textContent = ctaConfig.helperText || "";
+        helperEl.classList.toggle("hidden", !ctaConfig.helperText);
+      }
       ctaBtn.textContent = ctaConfig.buttonLabel;
+      ctaBtn.setAttribute(
+        "aria-label",
+        ctaConfig.productId && ctaConfig.text
+          ? `${ctaConfig.text} ${ctaConfig.buttonLabel}`
+          : ctaConfig.buttonLabel
+      );
       ctaBtn.disabled = Boolean(ctaConfig.disabled);
-      noteEl.textContent = ctaConfig.note || "";
-      noteEl.classList.toggle("hidden", !ctaConfig.note);
+      if (noteEl) {
+        noteEl.textContent = ctaConfig.note || "";
+        noteEl.classList.toggle("hidden", !ctaConfig.note);
+      }
       ctaBtn.dataset.action = ctaConfig.mode;
       if (ctaConfig.productId) {
         ctaBtn.dataset.productId = ctaConfig.productId;
@@ -4091,6 +4419,14 @@
       eveningEl.textContent = formatRoutineSummaryValue(summary.evening.completed, summary.evening.total);
       morningRowEl.className = `routine-progress-row routine-progress-row--${getRoutineSummaryVariant(summary.morning.completed, summary.morning.total)}`;
       eveningRowEl.className = `routine-progress-row routine-progress-row--${getRoutineSummaryVariant(summary.evening.completed, summary.evening.total)}`;
+      morningRowEl.setAttribute("role", "button");
+      morningRowEl.setAttribute("tabindex", "0");
+      morningRowEl.setAttribute("aria-label", `아침 루틴 사용 기록하기, ${morningEl.textContent}`);
+      morningRowEl.setAttribute("aria-disabled", summary.morning.total <= 0 || summary.morning.completed >= summary.morning.total ? "true" : "false");
+      eveningRowEl.setAttribute("role", "button");
+      eveningRowEl.setAttribute("tabindex", "0");
+      eveningRowEl.setAttribute("aria-label", `저녁 루틴 사용 기록하기, ${eveningEl.textContent}`);
+      eveningRowEl.setAttribute("aria-disabled", summary.evening.total <= 0 || summary.evening.completed >= summary.evening.total ? "true" : "false");
       if (morningSummaryEl) {
         morningSummaryEl.textContent = morningLabel;
       }
@@ -4145,7 +4481,7 @@
       }, durationMs);
     }
 
-    function showRoutineToast(title = "✅ 루틴 완료!", description = "오늘도 잘하고 있어요") {
+    function showRoutineToast(title = "사용 완료!", description = "잔량과 D-day가 업데이트됐어요") {
       let toastEl = document.getElementById("routineToastCard");
       if (!toastEl) {
         toastEl = document.createElement("div");
@@ -4348,9 +4684,18 @@
     }
 
     async function handleFirstProductUseCta() {
+      const productId = firstProductSuccessProductId;
       hideFirstProductSuccessModal({ restoreFocus: false });
       await setActiveScreen("home");
-      scrollToRoutineSection({ highlight: true });
+      if (!productId) return;
+
+      const product = activeProducts.find((item) => item.id === productId);
+      const routineSession = product ? getPriorityProductRoutineSession(product) : "";
+      if (routineSession) {
+        await runRoutine(productId, routineSession);
+        return;
+      }
+      await applyUsageToProduct(productId);
     }
 
     function handleFirstProductLaterCta() {
@@ -4509,11 +4854,13 @@
       const hasMorningRoutineTargets = activeProducts.some((product) => {
         return !isSampleProduct(product)
           && isProductInRoutine(product, "morning")
+          && !todayUsageState.morning?.has(product.id)
           && calculateRemainingMl(product) > 0;
       });
       const hasEveningRoutineTargets = activeProducts.some((product) => {
         return !isSampleProduct(product)
           && isProductInRoutine(product, "evening")
+          && !todayUsageState.evening?.has(product.id)
           && calculateRemainingMl(product) > 0;
       });
 
@@ -4994,6 +5341,9 @@
             remainingPct: DEFAULT_REMAINING_PERCENT,
             remainingPercent: DEFAULT_REMAINING_PERCENT,
             usageStepPercent: DEFAULT_USAGE_STEP_PERCENT,
+            purchaseLinks: {
+              ...DEFAULT_PURCHASE_LINKS
+            },
             routine,
             startDate: now,
             createdAt: now,
@@ -5408,9 +5758,13 @@
           if (normalizedSession) {
             showRoutineToast();
           } else if (isFirstUsageAction) {
-            showToast("사용 기록 완료 ✅", "잔량과 예상 소진일이 업데이트됐어요", 1800);
+            showToast("사용 완료!", "잔량과 D-day가 업데이트됐어요", 1800, {
+              variant: "success"
+            });
           } else {
-            showToast("사용 기록 완료", "", 1200);
+            showToast("사용 완료!", "", 1200, {
+              variant: "success"
+            });
           }
         }
         return true;
@@ -5519,6 +5873,17 @@
       }
     }
 
+    async function handleRoutineChecklistActivation(routineType) {
+      if (routineType !== "morning" && routineType !== "evening") return;
+      const targetRow = document.getElementById(routineType === "morning" ? "morningRoutineRow" : "eveningRoutineRow");
+      const targetBtn = document.getElementById(routineType === "morning" ? "completeMorningRoutineBtn" : "completeEveningRoutineBtn");
+      const isDisabled = targetRow?.getAttribute("aria-disabled") === "true" || Boolean(targetBtn?.disabled);
+      if (isDisabled) return;
+
+      triggerButtonPressEffect(targetRow || targetBtn);
+      await completeRoutine(routineType);
+    }
+
     function renderActiveProductsList() {
       const listEl = document.getElementById("activeProductList");
       listEl.innerHTML = "";
@@ -5551,9 +5916,12 @@
 
       const todayFocusProduct = getTodayFocusProduct();
       const todayFocusProductId = todayFocusProduct?.id || "";
-      const visibleProducts = todayFocusProductId
-        ? activeProducts.filter((product) => product.id !== todayFocusProductId)
-        : activeProducts;
+      const productListProducts = getHomeProductListProducts();
+      if (productListProducts.length <= HOME_PRODUCT_PREVIEW_LIMIT) {
+        shouldShowAllHomeProducts = false;
+      }
+      const visibleProducts = getVisibleHomeProductListProducts(productListProducts);
+      const hiddenProductCount = Math.max(0, productListProducts.length - visibleProducts.length);
 
       if (todayFocusProductId && openedPurchaseMenuProductId === todayFocusProductId && openedPurchaseMenuSection === "activeProductList") {
         openedPurchaseMenuProductId = null;
@@ -5562,7 +5930,7 @@
       }
 
       if (visibleProducts.length === 0) {
-        listEl.innerHTML = "<p class='hint product-list-empty-note'>상단 제품 외 다른 사용 중 제품이 없습니다.</p>";
+        listEl.innerHTML = "<p class='hint product-list-empty-note'>현재 표시할 사용 중 제품이 없습니다.</p>";
         renderProductDetailModal();
         setWriteUIEnabled(Boolean(currentUser));
         return;
@@ -5575,6 +5943,7 @@
           guidedProductRow = row;
         }
       });
+      listEl.insertAdjacentHTML("beforeend", getProductListMoreActionMarkup(hiddenProductCount));
 
       renderProductDetailModal();
       setWriteUIEnabled(Boolean(currentUser));
@@ -5832,6 +6201,16 @@
       const target = event.target;
       if (!(target instanceof Element)) return;
 
+      const productListActionBtn = target.closest("[data-product-list-action]");
+      if (productListActionBtn) {
+        const action = productListActionBtn.getAttribute("data-product-list-action");
+        if (action === "show-all") {
+          shouldShowAllHomeProducts = true;
+          renderActiveProductsList();
+        }
+        return;
+      }
+
       const stopBtn = target.closest(".stop-product-btn");
       if (stopBtn) {
         const id = stopBtn.getAttribute("data-product-id");
@@ -5869,7 +6248,7 @@
       const purchaseCtaBtn = target.closest(".purchase-cta-btn");
       if (purchaseCtaBtn) {
         const id = purchaseCtaBtn.getAttribute("data-product-id");
-        togglePurchaseMenu(id, { section: "activeProductList" });
+        openPurchaseOptionsModal(id);
         return;
       }
 
@@ -5953,7 +6332,7 @@
         event.stopPropagation();
         triggerButtonPressEffect(purchaseCtaBtn, 120);
         const productId = purchaseCtaBtn.getAttribute("data-product-id");
-        togglePurchaseMenu(productId, { section: "soonDepletion" });
+        openPurchaseOptionsModal(productId);
         return;
       }
 
@@ -6026,7 +6405,7 @@
 
       document.getElementById("activeProductList").addEventListener("click", handleActiveProductListClick);
       document.getElementById("soonDepletionList").addEventListener("click", handleSoonDepletionListClick);
-      document.getElementById("todayStatusPrimaryCta").addEventListener("click", handleTodayStatusPrimaryCta);
+      document.getElementById("todayStatusPrimaryCta")?.addEventListener("click", handleTodayStatusPrimaryCta);
       document.getElementById("productFormToggleBtn").addEventListener("click", () => {
         void toggleProductCreationForm();
       });
@@ -6036,6 +6415,25 @@
         if (event.target === event.currentTarget && isProductDetailOpen) {
           closeProductDetailModal();
         }
+      });
+      document.getElementById("closePurchaseOptionsModalBtn")?.addEventListener("click", () => {
+        closePurchaseOptionsModal();
+      });
+      document.getElementById("purchaseOptionsModal")?.addEventListener("click", (event) => {
+        if (event.target === event.currentTarget && isPurchaseOptionsModalOpen) {
+          closePurchaseOptionsModal();
+        }
+      });
+      document.getElementById("purchaseOptionsModalActions")?.addEventListener("click", async (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+
+        const optionBtn = target.closest("[data-purchase-modal-marketplace]");
+        if (!optionBtn) return;
+
+        triggerButtonPressEffect(optionBtn, 120);
+        const marketplace = optionBtn.getAttribute("data-purchase-modal-marketplace");
+        await handlePurchaseOptionSelection(purchaseOptionsProductId, marketplace);
       });
       document.getElementById("firstProductSuccessModal").addEventListener("click", (event) => {
         if (event.target === event.currentTarget && isFirstProductSuccessModalOpen) {
@@ -6138,6 +6536,24 @@
         triggerButtonPressEffect(document.getElementById("completeEveningRoutineBtn"));
         await completeRoutine("evening");
       });
+      document.getElementById("morningRoutineRow").addEventListener("click", async (event) => {
+        if (event.target instanceof Element && event.target.closest("button")) return;
+        await handleRoutineChecklistActivation("morning");
+      });
+      document.getElementById("eveningRoutineRow").addEventListener("click", async (event) => {
+        if (event.target instanceof Element && event.target.closest("button")) return;
+        await handleRoutineChecklistActivation("evening");
+      });
+      document.getElementById("morningRoutineRow").addEventListener("keydown", async (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        await handleRoutineChecklistActivation("morning");
+      });
+      document.getElementById("eveningRoutineRow").addEventListener("keydown", async (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        await handleRoutineChecklistActivation("evening");
+      });
       document.querySelectorAll("[data-event-type]").forEach((btn) => {
         btn.addEventListener("click", async (e) => {
           const type = e.currentTarget.getAttribute("data-event-type");
@@ -6156,6 +6572,7 @@
       });
       document.addEventListener("keydown", onOnboardingKeydown);
       document.addEventListener("keydown", onProductDetailKeydown);
+      document.addEventListener("keydown", onPurchaseOptionsKeydown);
       document.addEventListener("keydown", onFirstProductSuccessKeydown);
     }
 
@@ -6252,6 +6669,7 @@
         routineFeedbackHideTimers.clear();
         routineFeedbackByProductId.clear();
         hideProductDetailModal({ restoreFocus: false });
+        closePurchaseOptionsModal({ restoreFocus: false });
         hideFirstProductSuccessModal({ restoreFocus: false });
         updateAuthUI(user);
         updateEmptyStateOnboarding();
