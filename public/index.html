@@ -161,11 +161,25 @@
     <section id="emptyLandingScreen" class="hero-section empty-landing" aria-label="서비스 소개">
       <div class="empty-landing-shell">
         <div class="empty-landing-copy">
-          <h2>왜 화장품은 항상 남기고 또 살까?</h2>
-          <p>오늘 사용만 기록하면 잔량과 소진일이 자동으로 바뀝니다</p>
+          <h2>오늘 사용만 기록하면<br />화장품 소진일이 자동으로 계산됩니다</h2>
+          <p>언제 다 쓰는지 몰라서 또 사는 문제,<br />이제 자동으로 관리하세요</p>
         </div>
 
-        <article class="landing-demo-card" aria-label="수분 세럼 자동 관리 예시">
+        <div id="landingQuickProductEntry" class="usage-config-group product-form-field product-form-field--name" aria-label="빠른 제품 입력">
+          <label for="landingQuickProductName" class="field-label">빠른 제품 입력</label>
+          <input
+            id="landingQuickProductName"
+            placeholder="예: 헤라 에센스"
+            autocomplete="off"
+            aria-describedby="landingQuickProductHelp"
+          />
+          <p id="landingQuickProductHelp" class="usage-input-help">제품명을 적고 시작하면 등록 화면으로 이어집니다</p>
+          <button id="landingPrimaryCta" class="landing-primary-cta" type="button">
+            입력하고 시작하기
+          </button>
+        </div>
+
+        <article class="landing-demo-card hidden" aria-label="수분 세럼 자동 관리 예시" aria-hidden="true" hidden>
           <div class="landing-demo-card-head">
             <strong>수분 세럼</strong>
             <span>자동 계산</span>
@@ -174,7 +188,7 @@
           <p>지금 안 사면 루틴이 끊길 수 있어요</p>
         </article>
 
-        <ol class="landing-flow-list" aria-label="서비스 이용 흐름">
+        <ol class="landing-flow-list hidden" aria-label="서비스 이용 흐름" aria-hidden="true" hidden>
           <li class="landing-flow-step">
             <span class="landing-flow-number" aria-hidden="true">1</span>
             <span class="landing-flow-copy">
@@ -197,10 +211,6 @@
             </span>
           </li>
         </ol>
-
-        <button id="landingPrimaryCta" class="landing-primary-cta" type="button">
-          내 화장품 언제 끝나는지 확인하기
-        </button>
 
         <div id="landingStartActions" class="landing-start-actions" aria-label="시작하기">
           <button id="googleLoginBtn" class="landing-start-btn landing-start-btn--google" type="button">Google 로그인</button>
@@ -285,7 +295,7 @@
             </div>
           </div>
         </div>
-        <div id="activeProductList" class="product-card-list"></div>
+        <div id="activeProductList" class="product-card-list" aria-live="polite"></div>
       </section>
 
       <section id="productAddSection" aria-label="제품 추가">
@@ -340,7 +350,7 @@
             <div id="quickAddPanel" class="quick-add-panel hidden" role="tabpanel" aria-labelledby="quickAddModeBtn" aria-hidden="true" hidden>
               <div class="quick-add-copy">
                 <label for="quickProductNames" class="field-label">빠른 추가 모드</label>
-                <p class="usage-input-help">쉼표나 줄바꿈으로 여러 제품을 한 번에 등록해요</p>
+                <p class="usage-input-help">쉼표, 줄바꿈, /, ;로 여러 제품을 한 번에 등록해요</p>
               </div>
               <textarea
                 id="quickProductNames"
@@ -351,6 +361,10 @@
 크림"
                 aria-describedby="quickAddHelp quickAddStatus"
               ></textarea>
+              <div id="quickAddPreview" class="quick-add-preview hidden" aria-label="등록 예정 제품" aria-live="polite">
+                <div class="quick-add-preview-title">등록 예정 제품</div>
+                <div id="quickAddPreviewList" class="quick-add-preview-list"></div>
+              </div>
               <div class="quick-add-options">
                 <label for="quickAddRoutine" class="field-label">기본 루틴</label>
                 <select id="quickAddRoutine">
@@ -359,11 +373,11 @@
                   <option value="twice_daily">하루 2회</option>
                   <option value="flexible">자유 사용</option>
                 </select>
-                <p id="quickAddHelp" class="usage-input-help">카테고리는 기타, 용량은 100ml, 1회 사용량은 1ml로 시작해요</p>
+                <p id="quickAddHelp" class="usage-input-help">중복 이름은 자동으로 한 번만 등록돼요</p>
               </div>
               <div class="quick-add-actions">
                 <button id="quickAddProductsBtn" class="product-submit-btn quick-add-submit-btn" type="button" disabled>한 번에 추가</button>
-                <p id="quickAddStatus" class="product-form-status" aria-live="polite">제품명을 쉼표나 줄바꿈으로 입력하세요</p>
+                <p id="quickAddStatus" class="product-form-status" aria-live="polite">제품명을 쉼표, 줄바꿈, /, ;로 입력하세요</p>
               </div>
             </div>
             <div id="productInputContainer" class="inline-form" role="tabpanel" aria-labelledby="singleAddModeBtn">

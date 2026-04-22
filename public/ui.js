@@ -264,6 +264,7 @@
     let productListRoutineFilter = "all";
     let productAddMode = "single";
     let openProductSetupEditorId = "";
+    let openProductIdentityEditorId = "";
     let routineSectionHighlightTimer = null;
     let todayOverviewAnimationTimer = null;
     let usageStreakAnimationTimer = null;
@@ -898,6 +899,7 @@
 
     function shouldShowLandingFirstScreen() {
       if (isDemoMode()) return !hasEnteredPrimaryFlow;
+      if (currentUser && currentUid) return false;
       if (hasEnteredPrimaryFlow) return false;
       if (shouldForceLandingFirstScreen()) return true;
 
@@ -1091,6 +1093,7 @@
       productListRoutineFilter = "all";
       productAddMode = "single";
       openProductSetupEditorId = "";
+      openProductIdentityEditorId = "";
       hasPlayedTopCtaIntro = false;
       hasRevealedProductForm = false;
       hasEnteredPrimaryFlow = false;
@@ -1295,6 +1298,28 @@
       focusElementWithoutScroll(nameInput);
     }
 
+    function getLandingQuickProductName() {
+      const landingInputEl = document.getElementById("landingQuickProductName");
+      return landingInputEl ? landingInputEl.value.trim() : "";
+    }
+
+    function focusLandingQuickProductNameInput() {
+      const landingInputEl = document.getElementById("landingQuickProductName");
+      if (!landingInputEl || landingInputEl.disabled) return;
+
+      focusElementWithoutScroll(landingInputEl);
+    }
+
+    function transferLandingQuickProductNameToProductForm() {
+      const landingProductName = getLandingQuickProductName();
+      const nameInputEl = document.getElementById("productName");
+      if (!landingProductName || !nameInputEl || nameInputEl.value.trim()) return false;
+
+      nameInputEl.value = landingProductName;
+      refreshProductMlValidationPreview();
+      return true;
+    }
+
     function focusActiveProductAddInput() {
       if (productAddMode === "quick") {
         const quickTextareaEl = document.getElementById("quickProductNames");
@@ -1412,14 +1437,72 @@
       return mode === "quick" ? "quick" : "single";
     }
 
+    function parseQuickProductNames(value) {
+      const seenNames = new Set();
+      return String(value || "")
+        .split(/[\n,;/]+/)
+        .map((name) => name.trim())
+        .filter(Boolean)
+        .filter((name) => {
+          const key = name.toLocaleLowerCase();
+          if (seenNames.has(key)) return false;
+          seenNames.add(key);
+          return true;
+        });
+    }
+
     function getQuickProductNames() {
       const textareaEl = document.getElementById("quickProductNames");
       if (!textareaEl) return [];
 
-      return textareaEl.value
-        .split(/[\n,]+/)
-        .map((name) => name.trim())
-        .filter(Boolean);
+      return parseQuickProductNames(textareaEl.value);
+    }
+
+    function setQuickProductNames(productNames = []) {
+      const textareaEl = document.getElementById("quickProductNames");
+      if (!textareaEl) return;
+
+      textareaEl.value = parseQuickProductNames(productNames.join("\n")).join("\n");
+    }
+
+    function renderQuickAddPreview(productNames = getQuickProductNames()) {
+      const previewEl = document.getElementById("quickAddPreview");
+      const listEl = document.getElementById("quickAddPreviewList");
+      if (!previewEl || !listEl) return;
+
+      const hasProducts = productNames.length > 0;
+      previewEl.classList.toggle("hidden", !hasProducts);
+      previewEl.setAttribute("aria-hidden", hasProducts ? "false" : "true");
+
+      listEl.innerHTML = "";
+      productNames.forEach((productName, index) => {
+        const itemEl = document.createElement("div");
+        itemEl.className = "quick-add-preview-chip";
+
+        const nameEl = document.createElement("span");
+        nameEl.textContent = productName;
+        itemEl.appendChild(nameEl);
+
+        const removeBtn = document.createElement("button");
+        removeBtn.className = "quick-add-preview-remove";
+        removeBtn.type = "button";
+        removeBtn.dataset.quickAddRemoveIndex = String(index);
+        removeBtn.setAttribute("aria-label", `${productName} 삭제`);
+        removeBtn.textContent = "삭제";
+        itemEl.appendChild(removeBtn);
+
+        listEl.appendChild(itemEl);
+      });
+    }
+
+    function removeQuickAddPreviewItem(index) {
+      const productNames = getQuickProductNames();
+      const removeIndex = Number(index);
+      if (!Number.isInteger(removeIndex) || removeIndex < 0 || removeIndex >= productNames.length) return;
+
+      productNames.splice(removeIndex, 1);
+      setQuickProductNames(productNames);
+      updateQuickAddButtonState(productNames);
     }
 
     function getQuickAddRoutineValue() {
@@ -1433,12 +1516,13 @@
       const canWrite = getWriteUiEnabledState();
       const productCount = productNames.length;
       const isDisabled = !canWrite || productCount === 0 || pendingProductCreation;
+      renderQuickAddPreview(productNames);
 
       if (quickAddBtn) {
         quickAddBtn.disabled = isDisabled;
         quickAddBtn.textContent = pendingProductCreation
           ? "추가 중..."
-          : (productCount > 0 ? `${productCount}개 제품 추가` : "한 번에 추가");
+          : `${productCount}개 제품 추가`;
       }
 
       if (statusEl) {
@@ -1452,7 +1536,7 @@
           statusEl.textContent = "제품을 추가하는 중이에요...";
           statusEl.className = "product-form-status";
         } else if (productCount === 0) {
-          statusEl.textContent = "제품명을 쉼표나 줄바꿈으로 입력하세요";
+          statusEl.textContent = "제품명을 쉼표, 줄바꿈, /, ;로 입력하세요";
           statusEl.className = "product-form-status";
         } else {
           statusEl.textContent = `${productCount}개 제품을 한 번에 추가할 수 있어요`;
@@ -1607,6 +1691,7 @@
       }
 
       if (currentUser && currentUid) {
+        transferLandingQuickProductNameToProductForm();
         scrollToProductCreationForm({ focusInput: true, activateRecord: false });
         showToast("제품을 먼저 추가해주세요", "제품명만 입력하면 바로 시작할 수 있어요.", 2000, {
           placement: "top"
@@ -1615,12 +1700,14 @@
       }
 
       if (!auth) {
+        transferLandingQuickProductNameToProductForm();
         scrollToProductCreationForm({ focusInput: true, activateRecord: false });
         return;
       }
 
       revealProductForm();
       updateProductFormVisibility();
+      transferLandingQuickProductNameToProductForm();
       scrollToProductCreationForm({ focusInput: false, activateRecord: false });
 
       const pendingAuthUser = waitForNextAuthenticatedUser();
@@ -1634,6 +1721,7 @@
         updateAuthUI(currentUser);
         updateProductFormVisibility();
         updateAddProductButtonState();
+        transferLandingQuickProductNameToProductForm();
         scrollToProductCreationForm({ focusInput: true, activateRecord: false });
       } catch (error) {
         pendingAuthUser.cancel();
@@ -1662,6 +1750,15 @@
       await run();
     }
 
+    async function handleLandingInputCta() {
+      if (!getLandingQuickProductName()) {
+        focusLandingQuickProductNameInput();
+        return;
+      }
+
+      await handleLandingPrimaryCta();
+    }
+
     function moveStartedUserToProductForm() {
       enterPrimaryFlow();
       if (hasRegisteredProducts || getActualActiveProductCount() > 0) {
@@ -1670,6 +1767,7 @@
 
       revealProductForm();
       updateProductFormVisibility();
+      transferLandingQuickProductNameToProductForm();
       updateAddProductButtonState();
       requestAnimationFrame(() => {
         scrollToProductCreationForm({ focusInput: true, activateRecord: false });
@@ -3165,6 +3263,47 @@
       };
     }
 
+    function getRemainingStockState(remainingPercent) {
+      const safePercent = Number(remainingPercent);
+      if (!Number.isFinite(safePercent)) {
+        return {
+          status: "safe",
+          label: "",
+          title: "",
+          message: "아직 여유 있어요 👍",
+          badgeClassName: ""
+        };
+      }
+
+      if (safePercent <= 10) {
+        return {
+          status: "danger",
+          label: "3일 내 소진",
+          title: "긴급",
+          message: "⚠️ 3일 뒤 소진 예정 지금 구매하지 않으면 사용이 끊길 수 있어요",
+          badgeClassName: "low-stock-badge--critical"
+        };
+      }
+
+      if (safePercent <= 20) {
+        return {
+          status: "warning",
+          label: "곧 다 써요",
+          title: "임박",
+          message: "곧 떨어질 수 있어요 ⚠️ 미리 준비해두세요",
+          badgeClassName: ""
+        };
+      }
+
+      return {
+        status: "safe",
+        label: "",
+        title: "",
+        message: "아직 여유 있어요 👍",
+        badgeClassName: ""
+      };
+    }
+
     function getPurchaseOptionsMarkup(productId, options = {}) {
       const isOpen = Boolean(options.isOpen);
       const extraClassName = options.extraClassName ? ` ${options.extraClassName}` : "";
@@ -3282,6 +3421,46 @@
       `;
     }
 
+    function getProductIdentityValue(product, fieldName) {
+      return String(product?.[fieldName] || "").trim();
+    }
+
+    function getProductIdentityEditorMarkup(product) {
+      const productId = escapeHtml(product.id);
+      const brand = escapeHtml(getProductIdentityValue(product, "brand"));
+      const productDisplayName = escapeHtml(getProductIdentityValue(product, "productDisplayName"));
+
+      return `
+        <div class="product-identity-editor hidden" data-role="identityEditor" aria-hidden="true">
+          <div class="product-identity-editor-grid">
+            <label class="product-identity-field">
+              <span>브랜드명</span>
+              <input
+                class="product-identity-input"
+                data-identity-field="brand"
+                data-product-id="${productId}"
+                value="${brand}"
+                placeholder="예: 라네즈"
+              />
+            </label>
+            <label class="product-identity-field">
+              <span>제품명</span>
+              <input
+                class="product-identity-input"
+                data-identity-field="productDisplayName"
+                data-product-id="${productId}"
+                value="${productDisplayName}"
+                placeholder="예: 크림 스킨"
+              />
+            </label>
+          </div>
+          <div class="product-identity-editor-actions">
+            <button class="product-identity-save-btn" type="button" data-product-id="${productId}">저장</button>
+          </div>
+        </div>
+      `;
+    }
+
     function createProductRowElement(product, options = {}) {
       const row = document.createElement("div");
       row.dataset.productId = product.id;
@@ -3290,7 +3469,8 @@
         row.dataset.routineGroup = routineGroup;
       }
 
-      const name = product.brand ? `${product.name} (${product.brand})` : product.name;
+      const titleProductName = getProductIdentityValue(product, "productDisplayName") || product.name || "제품";
+      const name = product.brand ? `${titleProductName} (${product.brand})` : titleProductName;
       const routineToggleMarkup = options.showRoutineToggle ? `
         <label class="routine-product-check">
           <input
@@ -3331,6 +3511,22 @@
             </div>
             <span class="product-dday-chip product-dday-chip--list" data-role="depletionDday"></span>
           </div>
+          <div class="product-identity-summary" data-role="identitySummary">
+            <div class="product-identity-values">
+              <div class="product-identity-item">
+                <span>브랜드</span>
+                <strong data-role="identityBrandText">미입력</strong>
+              </div>
+              <div class="product-identity-item">
+                <span>제품명</span>
+                <strong data-role="identityNameText">미입력</strong>
+              </div>
+            </div>
+            <button class="btn-secondary product-identity-open-btn" type="button" data-product-id="${product.id}">
+              상세 입력
+            </button>
+          </div>
+          ${getProductIdentityEditorMarkup(product)}
           <div class="product-progress-block" aria-label="잔량 및 소진 예측">
             <div class="product-progress-header">
               <span class="product-progress-label" data-role="remainingText"></span>
@@ -3424,7 +3620,9 @@
         || Boolean(pendingRoutineType)
         || pendingUsageProductIds.has(product.id)
         || remainingMl <= 0;
-      const showPurchaseRecommendation = shouldShowPurchaseRecommendation(remainingPercent, daysLeft);
+      const remainingStockState = getRemainingStockState(percent);
+      const showPurchaseRecommendation = Boolean(remainingStockState.message);
+      const showPurchaseButton = remainingStockState.status !== "safe";
       const isPurchaseMenuOpen = openedPurchaseMenuProductId === product.id
         && openedPurchaseMenuSection === "activeProductList";
       const todayUsageState = buildTodayRoutineUsageState(recentUsageEvents);
@@ -3434,6 +3632,7 @@
       const isPriorityProduct = getPriorityProductByRemaining()?.id === product.id;
       const needsSetup = isProductSetupIncomplete(product);
       const isSetupEditorOpen = openProductSetupEditorId === product.id;
+      const isIdentityEditorOpen = openProductIdentityEditorId === product.id;
       const productDisplayName = product.brand ? `${product.name} (${product.brand})` : (product.name || "제품");
 
       row.className = [
@@ -3442,6 +3641,7 @@
         isPriorityProduct ? "product-row--priority" : "",
         needsSetup ? "product-row--setup-needed" : "",
         isSetupEditorOpen ? "product-row--setup-editing" : "",
+        isIdentityEditorOpen ? "product-row--identity-editing" : "",
         isRoutineFeedbackActive ? "product-row--routine-complete" : "",
         shouldShowCreationGuide ? "product-row--newly-added" : "",
         shouldHighlightRecentUse ? "product-row--recently-used" : ""
@@ -3464,6 +3664,11 @@
       const routineFeedbackEl = row.querySelector('[data-role="routineFeedback"]');
       const setupPromptEl = row.querySelector('[data-role="setupPrompt"]');
       const setupEditorEl = row.querySelector('[data-role="setupEditor"]');
+      const identityBrandTextEl = row.querySelector('[data-role="identityBrandText"]');
+      const identityNameTextEl = row.querySelector('[data-role="identityNameText"]');
+      const identityEditorEl = row.querySelector('[data-role="identityEditor"]');
+      const identityOpenBtn = row.querySelector(".product-identity-open-btn");
+      const identitySaveBtn = row.querySelector(".product-identity-save-btn");
       const setupOpenBtn = row.querySelector(".product-setup-open-btn");
       const setupSaveBtn = row.querySelector(".product-setup-save-btn");
       const useProductBtn = row.querySelector(".use-product-btn");
@@ -3471,10 +3676,9 @@
       const progressTrackEl = row.querySelector(".progress-track");
       const purchaseCtaBtn = row.querySelector(".purchase-cta-btn");
       const stopProductBtn = row.querySelector(".stop-product-btn");
-      const purchaseCopy = getPurchaseRecommendationCopy(daysLeft);
-      const isUrgentPurchaseState = purchaseCopy.status === "urgent";
-      const isWarningPurchaseState = purchaseCopy.status === "warning";
-      const isSafePurchaseState = purchaseCopy.status === "safe";
+      const isUrgentPurchaseState = remainingStockState.status === "danger";
+      const isWarningPurchaseState = remainingStockState.status === "warning";
+      const isSafePurchaseState = remainingStockState.status === "safe";
 
       if (remainingTextEl) {
         remainingTextEl.textContent = totalMl > 0
@@ -3514,6 +3718,22 @@
         setupSaveBtn.disabled = !currentUser || isSample || pendingProductSetupProductIds.has(product.id);
         setupSaveBtn.textContent = pendingProductSetupProductIds.has(product.id) ? "저장 중..." : "설정 저장";
       }
+      if (identityBrandTextEl) {
+        identityBrandTextEl.textContent = getProductIdentityValue(product, "brand") || "미입력";
+      }
+      if (identityNameTextEl) {
+        identityNameTextEl.textContent = getProductIdentityValue(product, "productDisplayName") || "미입력";
+      }
+      if (identityEditorEl) {
+        identityEditorEl.classList.toggle("hidden", !isIdentityEditorOpen);
+        identityEditorEl.setAttribute("aria-hidden", isIdentityEditorOpen ? "false" : "true");
+      }
+      if (identityOpenBtn) {
+        identityOpenBtn.disabled = !currentUser || isSample;
+      }
+      if (identitySaveBtn) {
+        identitySaveBtn.disabled = !currentUser || isSample;
+      }
       if (routineToggleEl) {
         const routineGroup = routineToggleEl.getAttribute("data-routine-group");
         const isRoutineGroup = routineGroup === "morning" || routineGroup === "evening";
@@ -3549,14 +3769,14 @@
           "low-stock-badge--priority",
           "low-stock-badge--setup"
         );
-        if (needsSetup) {
+        if (showPurchaseButton) {
+          badgeEl.textContent = remainingStockState.label;
+          if (remainingStockState.badgeClassName) {
+            badgeEl.classList.add(remainingStockState.badgeClassName);
+          }
+        } else if (needsSetup) {
           badgeEl.textContent = "⚠ 설정 필요";
           badgeEl.classList.add("low-stock-badge--setup");
-        } else if (percent <= 10) {
-          badgeEl.textContent = "곧 소진";
-          badgeEl.classList.add("low-stock-badge--critical");
-        } else if (percent <= 20) {
-          badgeEl.textContent = "곧 소진";
         } else if (isPriorityProduct) {
           badgeEl.textContent = "오늘 우선";
           badgeEl.classList.add("low-stock-badge--priority");
@@ -3592,13 +3812,10 @@
 
       if (hintEl) {
         hintEl.classList.remove("depletion-hint--critical");
-        if (percent <= 10) {
-          hintEl.textContent = purchaseCopy.subtitle;
+        if (showPurchaseButton) {
+          hintEl.textContent = remainingStockState.message;
           hintEl.classList.remove("hidden");
           hintEl.classList.toggle("depletion-hint--critical", isUrgentPurchaseState);
-        } else if (percent <= 20) {
-          hintEl.textContent = purchaseCopy.subtitle;
-          hintEl.classList.remove("hidden");
         } else {
           hintEl.textContent = "";
           hintEl.classList.add("hidden");
@@ -3616,26 +3833,26 @@
         purchaseEl.classList.toggle("purchase-recommendation--urgent", showPurchaseRecommendation && isUrgentPurchaseState);
       }
       if (purchaseTitleEl) {
-        purchaseTitleEl.textContent = purchaseCopy.title;
+        purchaseTitleEl.textContent = remainingStockState.message;
       }
       if (purchaseSubtitleEl) {
-        purchaseSubtitleEl.textContent = purchaseCopy.subtitle;
+        purchaseSubtitleEl.textContent = remainingStockState.label || remainingStockState.title;
       }
       if (purchaseSupportNoteEl) {
-        purchaseSupportNoteEl.textContent = purchaseCopy.secondaryNote;
-        purchaseSupportNoteEl.classList.toggle("hidden", !purchaseCopy.secondaryNote || (isPurchaseMenuOpen && purchaseCopy.showButton));
+        purchaseSupportNoteEl.textContent = "";
+        purchaseSupportNoteEl.classList.add("hidden");
       }
       if (purchaseOptionsEl) {
-        const shouldOpenPurchaseOptions = showPurchaseRecommendation && isPurchaseMenuOpen && purchaseCopy.showButton;
+        const shouldOpenPurchaseOptions = showPurchaseButton && isPurchaseMenuOpen;
         purchaseOptionsEl.classList.toggle("purchase-options--open", shouldOpenPurchaseOptions);
         purchaseOptionsEl.setAttribute("aria-hidden", shouldOpenPurchaseOptions ? "false" : "true");
       }
       if (purchaseCtaBtn) {
-        purchaseCtaBtn.textContent = purchaseCopy.buttonLabel;
-        purchaseCtaBtn.classList.toggle("hidden", !showPurchaseRecommendation || isPurchaseMenuOpen || !purchaseCopy.showButton);
-        purchaseCtaBtn.classList.toggle("purchase-cta-btn--warning", showPurchaseRecommendation && isWarningPurchaseState);
-        purchaseCtaBtn.classList.toggle("purchase-cta-btn--urgent", showPurchaseRecommendation && isUrgentPurchaseState);
-        purchaseCtaBtn.setAttribute("aria-expanded", showPurchaseRecommendation && isPurchaseMenuOpen && purchaseCopy.showButton ? "true" : "false");
+        purchaseCtaBtn.textContent = "구매하기";
+        purchaseCtaBtn.classList.toggle("hidden", !showPurchaseButton || isPurchaseMenuOpen);
+        purchaseCtaBtn.classList.toggle("purchase-cta-btn--warning", showPurchaseButton && isWarningPurchaseState);
+        purchaseCtaBtn.classList.toggle("purchase-cta-btn--urgent", showPurchaseButton && isUrgentPurchaseState);
+        purchaseCtaBtn.setAttribute("aria-expanded", showPurchaseButton && isPurchaseMenuOpen ? "true" : "false");
       }
  
       if (creationGuideEl) {
@@ -4374,14 +4591,6 @@
       refreshProductMlValidationPreview();
     }
 
-    function shouldShowPurchaseRecommendation(remainingPercent, daysLeft) {
-      const safePercent = Number(remainingPercent);
-      const safeDaysLeft = Number(daysLeft);
-      const lowByPercent = Number.isFinite(safePercent) && safePercent <= 20;
-      const lowByDate = Number.isFinite(safeDaysLeft) && safeDaysLeft <= SOON_DEPLETION_DAYS_THRESHOLD;
-      return lowByPercent || lowByDate;
-    }
-
     function getPurchasePlatformOption(marketplace) {
       return PURCHASE_PLATFORM_OPTIONS.find((option) => option.id === marketplace) || null;
     }
@@ -4401,6 +4610,22 @@
 
       const purchaseLinks = getProductPurchaseLinks(product);
       return purchaseLinks[marketplace] || buildPurchaseSearchUrl(marketplace, product.name);
+    }
+
+    async function trackPurchaseClick(productName, channel) {
+      const safeProductName = String(productName || "").trim();
+      const safeChannel = String(channel || "").trim();
+      if (!safeProductName || !safeChannel || !db) return;
+
+      try {
+        await db.collection("purchaseClicks").add({
+          productName: safeProductName,
+          channel: safeChannel,
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      } catch (error) {
+        console.error(error);
+      }
     }
 
     function setPurchaseOptionsModalVisibility(isVisible) {
@@ -4520,14 +4745,9 @@
       openedPurchaseMenuSection = "";
       pendingPurchaseMenuFocusTarget = null;
 
+      await trackPurchaseClick(product.name || "제품", marketplace);
       window.open(url, "_blank");
       closePurchaseOptionsModal({ restoreFocus: false });
-
-      const trackingHandler = window.purchaseTracking?.trackPurchaseClick;
-      if (typeof trackingHandler === "function") {
-        const trackingUserId = currentUser?.uid || currentUid || "anonymous";
-        void trackingHandler(product, marketplace, trackingUserId);
-      }
     }
 
     function focusPurchaseMenuIfNeeded() {
@@ -6183,7 +6403,7 @@
         showRecentProductCreationGuide(createdProductIds[0]);
         await setActiveScreen("home");
         await renderActiveProducts();
-        showToast(`${createdProductIds.length}개 제품이 추가되었습니다`, "홈에서 바로 확인해보세요", PRODUCT_ADD_SUCCESS_TOAST_DURATION_MS, {
+        showToast(`${createdProductIds.length}개 제품이 등록되었어요. 세부 설정을 추가하면 예측이 더 정확해져요`, "", PRODUCT_ADD_SUCCESS_TOAST_DURATION_MS, {
           variant: "success",
           placement: "top"
         });
@@ -6251,6 +6471,63 @@
           setupBtn.focus();
         }
       });
+    }
+
+    function openProductIdentityEditor(productId) {
+      const targetProduct = activeProducts.find((item) => item.id === productId);
+      if (!targetProduct || isSampleProduct(targetProduct)) return;
+
+      openProductIdentityEditorId = productId;
+      renderActiveProductsList();
+      requestAnimationFrame(() => {
+        const row = document.querySelector(`#activeProductList .product-row[data-product-id="${productId}"]`);
+        const firstInput = row?.querySelector('[data-identity-field="brand"]');
+        if (firstInput && typeof firstInput.focus === "function") {
+          firstInput.focus();
+        }
+      });
+    }
+
+    function getProductIdentityInputState(productId) {
+      const row = document.querySelector(`#activeProductList .product-row[data-product-id="${productId}"]`);
+      if (!row) return { row: null, brand: "", productDisplayName: "" };
+
+      const brandEl = row.querySelector('[data-identity-field="brand"]');
+      const productDisplayNameEl = row.querySelector('[data-identity-field="productDisplayName"]');
+      return {
+        row,
+        brand: String(brandEl?.value || "").trim(),
+        productDisplayName: String(productDisplayNameEl?.value || "").trim()
+      };
+    }
+
+    async function updateProductIdentity(productId) {
+      const canWrite = ensureAuthenticatedForWrite();
+      if (!canWrite || !currentUid || !productId) return;
+
+      const targetProduct = activeProducts.find((item) => item.id === productId);
+      if (!targetProduct || isSampleProduct(targetProduct)) return;
+
+      const identityState = getProductIdentityInputState(productId);
+      const payload = {
+        brand: identityState.brand || null,
+        productDisplayName: identityState.productDisplayName || null,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      };
+
+      try {
+        await getUserRef("products").doc(productId).update(payload);
+        targetProduct.brand = payload.brand;
+        targetProduct.productDisplayName = payload.productDisplayName;
+        openProductIdentityEditorId = "";
+        renderActiveProductsList();
+      } catch (error) {
+        if (isPermissionError(error)) {
+          showAuthMessage("권한 오류로 상세 입력 저장에 실패했습니다. 다시 로그인 후 시도해주세요.");
+          return;
+        }
+        throw error;
+      }
     }
 
     function setProductSetupError(row, message = "") {
@@ -7200,6 +7477,20 @@
         return;
       }
 
+      const identityOpenBtn = target.closest(".product-identity-open-btn");
+      if (identityOpenBtn) {
+        const id = identityOpenBtn.getAttribute("data-product-id");
+        openProductIdentityEditor(id);
+        return;
+      }
+
+      const identitySaveBtn = target.closest(".product-identity-save-btn");
+      if (identitySaveBtn) {
+        const id = identitySaveBtn.getAttribute("data-product-id");
+        await updateProductIdentity(id);
+        return;
+      }
+
       const setupOpenBtn = target.closest(".product-setup-open-btn");
       if (setupOpenBtn) {
         const id = setupOpenBtn.getAttribute("data-product-id");
@@ -7396,7 +7687,12 @@
         showOnboardingModal();
       });
       document.getElementById("landingPrimaryCta")?.addEventListener("click", async () => {
-        await handleLandingPrimaryCta();
+        await handleLandingInputCta();
+      });
+      document.getElementById("landingQuickProductName")?.addEventListener("keydown", async (event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        await handleLandingInputCta();
       });
 
       document.getElementById("googleLoginBtn")?.addEventListener("click", async () => {
@@ -7489,6 +7785,15 @@
       });
       document.getElementById("quickAddRoutine")?.addEventListener("change", () => {
         updateQuickAddButtonState();
+      });
+      document.getElementById("quickAddPreview")?.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+
+        const removeBtn = target.closest("[data-quick-add-remove-index]");
+        if (!removeBtn) return;
+
+        removeQuickAddPreviewItem(removeBtn.getAttribute("data-quick-add-remove-index"));
       });
       document.getElementById("quickAddProductsBtn")?.addEventListener("click", addQuickProducts);
       document.getElementById("addProductBtn").addEventListener("click", addProduct);
@@ -7712,6 +8017,7 @@
         hasRevealedProductForm = false;
         productAddMode = "single";
         openProductSetupEditorId = "";
+        openProductIdentityEditorId = "";
         recentUsageEvents = [];
         pendingProductSetupProductIds.clear();
         routineFeedbackExitTimers.forEach((timerId) => {
