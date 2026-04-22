@@ -232,42 +232,44 @@
     </section>
 
     <div id="primaryAppSections" class="primary-app-sections">
-      <section id="todayActionSection" class="card today-status-card today-summary-card" aria-label="오늘 상태">
-        <div class="home-section-heading home-section-heading--compact">
-          <div>
-            <div class="today-status-eyebrow">오늘 상태</div>
-            <h3>한눈에 보는 루틴 상태</h3>
-          </div>
-        </div>
-        <div id="homeStatusSummary" class="home-status-summary" aria-label="홈 상태 요약">
-          <article class="home-status-stat">
-            <span class="home-status-stat-label">곧 소진</span>
-            <strong id="homeSoonDepletionCount">0개</strong>
-          </article>
-          <article class="home-status-stat">
-            <span class="home-status-stat-label">오늘 기록 필요</span>
-            <strong id="homePendingRoutineCount">0개</strong>
-          </article>
-          <article class="home-status-stat">
-            <span class="home-status-stat-label">연속 기록</span>
-            <strong id="homeRoutineStreakCount">0일</strong>
-          </article>
-        </div>
-      </section>
-
-      <section id="soonDepletionSection" class="card soon-depletion-card active-priority-card" aria-label="오늘의 우선 제품">
+      <section id="soonDepletionSection" class="card soon-depletion-card active-priority-card today-action-hub-card" aria-label="오늘 할 일">
         <div class="home-section-heading">
           <div>
-            <div class="today-status-eyebrow">오늘의 우선 제품</div>
-            <h3>오늘 할 일</h3>
+            <div class="today-status-eyebrow">오늘 할 일</div>
+            <h3>지금 할 일을 바로 처리하세요</h3>
           </div>
         </div>
-        <div id="soonDepletionList"></div>
-        <div id="activeTodayCtaSection" class="active-cta-section" aria-label="지금 사용 기록하기">
-          <div id="today-cta" class="home-primary-cta" aria-hidden="false">
-            <p id="topCtaHelper" class="cta-helper hidden"></p>
-            <button id="cta-btn" type="button" data-action="add-product">오늘 사용 기록하기</button>
-            <p id="topCtaNote" class="cta-note hidden" aria-live="polite"></p>
+        <div class="today-action-hub">
+          <div id="homeStatusSummary" class="home-status-summary today-action-hub-summary" aria-label="오늘 할 일 요약">
+            <article class="home-status-stat">
+              <span class="home-status-stat-label">오늘 기록 필요</span>
+              <strong id="homePendingRoutineCount">0개</strong>
+            </article>
+            <article class="home-status-stat">
+              <span class="home-status-stat-label">곧 소진</span>
+              <strong id="homeSoonDepletionCount">0개</strong>
+            </article>
+            <article class="home-status-stat">
+              <span class="home-status-stat-label">연속 기록</span>
+              <strong id="homeRoutineStreakCount">0일</strong>
+            </article>
+          </div>
+          <div id="activeTodayCtaSection" class="active-cta-section" aria-label="오늘 할 일 실행">
+            <div id="today-cta" class="home-primary-cta today-action-panel" aria-hidden="false">
+              <div class="today-action-copy">
+                <strong>지금 기록하면 소진일이 더 정확해져요</strong>
+                <p id="topCtaHelper" class="cta-helper hidden"></p>
+              </div>
+              <div class="today-action-buttons">
+                <button id="cta-btn" type="button" data-action="add-product">지금 사용 기록하기</button>
+                <button id="topSecondaryActionBtn" class="top-secondary-action-btn" type="button" data-action="routine">오늘 루틴 보기</button>
+              </div>
+              <p id="topCtaNote" class="cta-note hidden" aria-live="polite"></p>
+            </div>
+          </div>
+          <div class="today-representative-block" aria-label="가장 먼저 확인할 제품">
+            <div class="today-representative-label">가장 먼저 확인할 제품</div>
+            <div id="soonDepletionList"></div>
           </div>
         </div>
         <p id="soonDepletionNote" class="soon-depletion-note hidden">보이는 D-day는 실제 제품 등록 후 자동으로 내 데이터로 바뀝니다</p>
@@ -373,7 +375,74 @@
                   <option value="twice_daily">하루 2회</option>
                   <option value="flexible">자유 사용</option>
                 </select>
-                <p id="quickAddHelp" class="usage-input-help">중복 이름은 자동으로 한 번만 등록돼요</p>
+                <fieldset id="quickAddStartTypeGroup" class="product-start-type-group quick-add-start-type-group">
+                  <legend class="field-label">시작 방식</legend>
+                  <div class="product-start-type-options">
+                    <label class="product-start-type-option">
+                      <input type="radio" name="quickProductStartType" value="new" checked />
+                      <span>새 제품으로 시작</span>
+                    </label>
+                    <label class="product-start-type-option">
+                      <input type="radio" name="quickProductStartType" value="used" />
+                      <span>사용 중인 제품으로 시작</span>
+                    </label>
+                  </div>
+                </fieldset>
+                <div id="quickAddTotalMlGroup" class="usage-config-group usage-config-group--ml">
+                  <label for="quickAddTotalMl" class="field-label">총 용량 (ml)</label>
+                  <div class="usage-input-control">
+                    <input
+                      id="quickAddTotalMl"
+                      type="number"
+                      min="5"
+                      step="0.1"
+                      placeholder="예: 50 / 100 / 200"
+                      inputmode="decimal"
+                      aria-describedby="quickAddTotalMlHelp quickAddTotalMlError"
+                    />
+                    <span class="usage-input-unit">ml</span>
+                  </div>
+                  <p id="quickAddTotalMlHelp" class="usage-input-help">비워두면 100ml로 등록돼요</p>
+                  <p id="quickAddTotalMlError" class="usage-input-error hidden" aria-live="polite"></p>
+                </div>
+                <div id="quickAddCurrentMlGroup" class="usage-config-group usage-config-group--ml hidden" aria-hidden="true" hidden>
+                  <label for="quickAddCurrentMl" class="field-label">현재 남은 양 (ml)</label>
+                  <div class="usage-input-control">
+                    <input
+                      id="quickAddCurrentMl"
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      placeholder="예: 20 / 35 / 80"
+                      inputmode="decimal"
+                      aria-describedby="quickAddCurrentMlHelp quickAddCurrentMlError"
+                    />
+                    <span class="usage-input-unit">ml</span>
+                  </div>
+                  <p id="quickAddCurrentMlHelp" class="usage-input-help">모든 제품에 같은 남은 양으로 먼저 등록돼요</p>
+                  <p id="quickAddCurrentMlError" class="usage-input-error hidden" aria-live="polite"></p>
+                </div>
+                <div id="quickAddPerUseMlGroup" class="usage-config-group usage-config-group--ml">
+                  <label for="quickAddPerUseMl" class="field-label">1회 사용량 (ml)</label>
+                  <div class="usage-input-control">
+                    <input
+                      id="quickAddPerUseMl"
+                      type="number"
+                      min="0.1"
+                      step="0.1"
+                      placeholder="예: 0.5 / 1 / 2"
+                      inputmode="decimal"
+                      aria-describedby="quickAddPerUseMlHelp quickAddPerUseMlError"
+                    />
+                    <span class="usage-input-unit">ml</span>
+                  </div>
+                  <p id="quickAddPerUseMlHelp" class="usage-input-help">비워두면 1ml로 등록돼요</p>
+                  <p id="quickAddPerUseMlError" class="usage-input-error hidden" aria-live="polite"></p>
+                </div>
+                <p id="quickAddHelp" class="usage-input-help">
+                  빠른 추가는 공통값으로 먼저 등록돼요<br />
+                  등록 후 각 카드에서 브랜드, 잔량, 루틴을 개별 수정할 수 있어요
+                </p>
               </div>
               <div class="quick-add-actions">
                 <button id="quickAddProductsBtn" class="product-submit-btn quick-add-submit-btn" type="button" disabled>한 번에 추가</button>
@@ -391,6 +460,20 @@
                 <p id="productNameHelp" class="usage-input-help">제품명만 입력해도 바로 추가할 수 있어요</p>
                 <p id="productNameError" class="usage-input-error hidden" aria-live="polite"></p>
               </div>
+              <fieldset id="productStartTypeGroup" class="product-start-type-group">
+                <legend class="field-label">제품 추가 방식</legend>
+                <div class="product-start-type-options">
+                  <label class="product-start-type-option">
+                    <input type="radio" name="productStartType" value="new" checked />
+                    <span>새 제품으로 시작</span>
+                  </label>
+                  <label class="product-start-type-option">
+                    <input type="radio" name="productStartType" value="used" />
+                    <span>사용 중인 제품으로 시작</span>
+                  </label>
+                </div>
+                <p id="productStartTypeHelp" class="usage-input-help">새 제품이 아니어도 지금 남은 양부터 추적할 수 있어요</p>
+              </fieldset>
               <div class="product-step-actions">
                 <button
                   id="productDetailsToggleBtn"
@@ -453,6 +536,23 @@
                   </div>
                   <p id="productTotalMlHelp" class="usage-input-help">비워두면 100ml로 시작해요</p>
                   <p id="productTotalMlError" class="usage-input-error hidden" aria-live="polite"></p>
+                </div>
+                <div id="productCurrentMlGroup" class="usage-config-group usage-config-group--ml product-form-field product-form-field--current hidden" aria-hidden="true" hidden>
+                  <label for="productCurrentMl" class="field-label">현재 남은 용량 (ml)</label>
+                  <div class="usage-input-control">
+                    <input
+                      id="productCurrentMl"
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      placeholder="예: 12 / 30 / 75"
+                      inputmode="decimal"
+                      aria-describedby="productCurrentMlHelp productCurrentMlError"
+                    />
+                    <span class="usage-input-unit">ml</span>
+                  </div>
+                  <p id="productCurrentMlHelp" class="usage-input-help">지금 남은 양을 입력하면 잔량률과 D-day가 맞춰져요</p>
+                  <p id="productCurrentMlError" class="usage-input-error hidden" aria-live="polite"></p>
                 </div>
                 <div id="productPerUseMlGroup" class="usage-config-group usage-config-group--ml product-form-field product-form-field--per-use">
                   <label for="productPerUseMl" class="field-label">1회 사용량 (ml)</label>
