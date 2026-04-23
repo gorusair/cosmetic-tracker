@@ -2260,6 +2260,24 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
   color: #7a3b2c;
 }
 
+.today-action-panel .cta-helper {
+  padding: 0;
+  border-left: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #7a3b2c;
+  font-size: 15px;
+}
+
+.today-action-panel .cta-note {
+  margin: 2px 0 0;
+  max-width: none;
+  color: #8a6355;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
 .active-priority-card #cta-btn {
   min-height: 62px;
   font-size: 17px;
@@ -2684,6 +2702,20 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
   gap: 12px;
 }
 
+#soonDepletionSection.today-action-hub-card {
+  padding: 34px 32px 28px;
+  border-color: #eead83;
+  background:
+    radial-gradient(320px 150px at 100% 0%, rgba(255, 223, 196, 0.82) 0%, rgba(255, 223, 196, 0) 70%),
+    linear-gradient(180deg, #fffdfb 0%, #fff1e6 100%);
+  box-shadow: 0 30px 58px rgba(197, 112, 58, 0.2);
+}
+
+#soonDepletionSection.today-action-hub-card .home-section-heading h3 {
+  font-size: 28px;
+  line-height: 1.15;
+}
+
 .today-status-card {
   position: relative;
   padding: var(--app-card-padding);
@@ -2764,60 +2796,72 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
 
 .today-action-hub {
   display: grid;
-  gap: 14px;
+  gap: 22px;
 }
 
 .today-action-hub-summary {
-  order: 1;
+  order: 3;
 }
 
 .today-action-panel {
-  order: 2;
-  padding: 14px;
+  order: 1;
+  min-height: 250px;
+  padding: 30px;
   border: 1px solid #f0c7a7;
-  border-radius: 16px;
+  border-radius: 22px;
   background:
-    radial-gradient(180px 82px at 100% 0%, rgba(255, 230, 204, 0.72) 0%, rgba(255, 230, 204, 0) 74%),
+    radial-gradient(260px 120px at 100% 0%, rgba(255, 222, 190, 0.84) 0%, rgba(255, 222, 190, 0) 74%),
     linear-gradient(180deg, #fffefd 0%, #fff7f0 100%);
+  box-shadow: 0 18px 34px rgba(197, 112, 58, 0.14);
 }
 
 .today-action-copy {
   display: grid;
-  gap: 5px;
+  gap: 10px;
 }
 
 .today-action-copy strong {
   color: #4c352e;
-  font-size: 16px;
+  font-size: 30px;
   font-weight: 900;
-  line-height: 1.35;
+  line-height: 1.18;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
 }
 
 .today-action-buttons {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(180px, 0.7fr);
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.32fr);
+  gap: 12px;
   align-items: stretch;
 }
 
-.top-secondary-action-btn {
+.today-action-hub-card #cta-btn {
+  min-height: 86px;
+  padding: 22px 24px;
+  border-radius: 20px;
+  font-size: 21px;
+  box-shadow: 0 26px 44px rgba(209, 71, 35, 0.38);
+}
+
+.today-action-hub-card .today-action-buttons .top-secondary-action-btn {
   min-width: 0;
-  min-height: 60px;
-  padding: 13px 14px;
-  border: 1px solid #e5c7b1;
+  min-height: 56px;
+  padding: 12px 14px;
+  border: 1px solid #ead8cc;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.82);
-  color: #7a4f3f;
+  background: rgba(255, 255, 255, 0.66);
+  color: #8a6355;
   font-size: 13px;
-  font-weight: 900;
+  font-weight: 800;
   line-height: 1.35;
-  box-shadow: 0 12px 22px rgba(161, 101, 63, 0.1);
+  box-shadow: 0 8px 16px rgba(161, 101, 63, 0.06);
 }
 
 .today-representative-block {
-  order: 3;
+  order: 2;
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .today-representative-label {
@@ -2833,7 +2877,7 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
 
 .home-primary-cta {
   display: grid;
-  gap: 9px;
+  gap: 14px;
   width: 100%;
   margin-top: 0;
 }
@@ -2850,12 +2894,12 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
   border: 0;
 }
 
-.home-status-stat {
+.today-action-hub-card .home-status-stat {
   min-width: 0;
-  padding: 14px 12px;
+  padding: 11px 10px;
   border: 1px solid #eadfd4;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.72);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.58);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
 }
 
@@ -2868,24 +2912,26 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
   color: #8a6355;
 }
 
-.home-status-stat strong {
+.today-action-hub-card .home-status-stat strong {
   display: block;
   color: #3f2f46;
-  font-size: 24px;
+  font-size: 21px;
   font-weight: 900;
   line-height: 1;
 }
 
-.home-priority-card {
+.today-action-hub-card .home-priority-card {
   display: grid;
-  gap: 13px;
-  padding: 22px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 22px;
+  padding: 24px;
   border: 1px solid #edb078;
-  border-radius: 20px;
+  border-radius: 22px;
   background:
-    radial-gradient(260px 130px at 100% 0%, rgba(255, 225, 190, 0.82) 0%, rgba(255, 225, 190, 0) 72%),
+    radial-gradient(220px 110px at 100% 0%, rgba(255, 225, 190, 0.74) 0%, rgba(255, 225, 190, 0) 72%),
     linear-gradient(145deg, #fffdf9 0%, #fff0e4 100%);
-  box-shadow: 0 24px 44px rgba(197, 112, 58, 0.18);
+  box-shadow: 0 22px 42px rgba(197, 112, 58, 0.16);
 }
 
 .home-priority-card--warning {
@@ -2899,7 +2945,8 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
     linear-gradient(145deg, #fffefd 0%, #fff4e9 100%);
 }
 
-.home-priority-card--empty {
+.today-action-hub-card .home-priority-card--empty {
+  grid-template-columns: 1fr;
   border-color: #e5d8f1;
   background: linear-gradient(180deg, #fffefe 0%, #faf7ff 100%);
 }
@@ -2933,7 +2980,9 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
 
 .home-priority-action {
   display: grid;
-  gap: 8px;
+  justify-items: end;
+  gap: 7px;
+  text-align: right;
 }
 
 .home-priority-main {
@@ -2947,7 +2996,7 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
 .home-priority-card h4 {
   margin: 0;
   overflow-wrap: anywhere;
-  font-size: 24px;
+  font-size: 22px;
   line-height: 1.2;
   color: #3d2e42;
 }
@@ -2964,13 +3013,20 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
   line-height: 1.35;
 }
 
+.home-priority-remaining {
+  color: #7a5e54;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
 .home-priority-card p {
   margin: 0;
 }
 
 .home-priority-message {
   color: #8d3428;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 900;
   line-height: 1.4;
   letter-spacing: 0;
@@ -2978,7 +3034,7 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
 
 .home-priority-dday {
   min-width: 0;
-  text-align: left;
+  text-align: right;
   color: #d54e37;
   font-size: 76px;
   font-weight: 900;
@@ -5953,6 +6009,8 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
   color: #4b3b33;
   font-size: 15px;
   font-weight: 800;
+  line-height: 1.35;
+  text-align: center;
   box-shadow: 0 10px 18px rgba(124, 86, 62, 0.08);
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
 }
@@ -6656,6 +6714,25 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
     border-radius: var(--app-card-radius);
   }
 
+  #soonDepletionSection.today-action-hub-card {
+    padding: 22px 16px 18px;
+  }
+
+  .today-action-panel {
+    min-height: 0;
+    padding: 22px 16px;
+  }
+
+  #soonDepletionSection.today-action-hub-card .home-section-heading h3,
+  .today-action-copy strong {
+    font-size: 24px;
+  }
+
+  .today-action-hub-card #cta-btn {
+    min-height: 76px;
+    font-size: 18px;
+  }
+
   .today-status-footer {
     margin-top: 16px;
   }
@@ -6682,7 +6759,8 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
     font-size: 22px;
   }
 
-  .home-priority-card {
+  .today-action-hub-card .home-priority-card {
+    grid-template-columns: 1fr;
     gap: 12px;
     padding: 20px 16px;
   }
@@ -6697,7 +6775,7 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
   .home-priority-dday {
     min-width: 0;
     text-align: left;
-    font-size: 64px;
+    font-size: 62px;
   }
 
   .home-priority-card h4 {
@@ -6706,6 +6784,11 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
 
   .home-priority-message {
     font-size: 15px;
+  }
+
+  .home-priority-action {
+    justify-items: start;
+    text-align: left;
   }
 
   .home-priority-facts {

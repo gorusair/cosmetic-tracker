@@ -28,6 +28,15 @@
     const SOON_DEPLETION_DAYS_THRESHOLD = 30;
     const PURCHASE_WARNING_DAYS_THRESHOLD = 20;
     const PURCHASE_URGENT_DAYS_THRESHOLD = 7;
+    const FIREBASE_CLICK_EVENT_NAMES = new Set([
+      "click_add_product",
+      "click_use_product",
+      "click_purchase",
+      "click_purchase_coupang",
+      "click_purchase_naver",
+      "click_purchase_oliveyoung",
+      "click_login"
+    ]);
     const DEFAULT_PURCHASE_LINKS = Object.freeze({
       coupang: "",
       naver: "",
@@ -36,17 +45,17 @@
     const PURCHASE_PLATFORM_OPTIONS = Object.freeze([
       Object.freeze({
         id: "coupang",
-        label: "쿠팡",
+        label: "쿠팡에서 보기",
         searchBaseUrl: "https://www.coupang.com/np/search?q="
       }),
       Object.freeze({
         id: "naver",
-        label: "네이버",
+        label: "네이버쇼핑에서 보기",
         searchBaseUrl: "https://search.shopping.naver.com/search/all?query="
       }),
       Object.freeze({
         id: "oliveyoung",
-        label: "올리브영",
+        label: "올리브영에서 보기",
         searchBaseUrl: "https://www.oliveyoung.co.kr/store/search/getSearchMain.do?query="
       })
     ]);
@@ -237,6 +246,7 @@
     let recentProductCreationGuide = null;
     let recentProductGuideFadeTimer = null;
     let recentProductGuideCleanupTimer = null;
+    let firebaseAnalyticsTrackerPromise = null;
     let pendingProductCreation = false;
     let isLandingTransitionRunning = false;
     const productFormTouchedFields = new Set();
@@ -1442,6 +1452,19 @@
       });
     }
 
+    function scrollToTodayRecordTarget(productId) {
+      setProductListSortMode("today");
+      setProductListRoutineFilter("all");
+
+      requestAnimationFrame(() => {
+        if (productId) {
+          scrollToPriorityProductCard(productId);
+          return;
+        }
+        scrollToProductListSection();
+      });
+    }
+
     function scrollToProductFormSection(options = {}) {
       scrollToProductCreationForm(options);
     }
@@ -1675,7 +1698,7 @@
         quickAddBtn.disabled = isDisabled;
         quickAddBtn.textContent = pendingProductCreation
           ? "추가 중..."
-          : `${productCount}개 제품 추가`;
+          : `${productCount}개 공통값으로 추가`;
       }
 
       if (statusEl) {
@@ -1689,7 +1712,7 @@
           statusEl.textContent = "제품을 추가하는 중이에요...";
           statusEl.className = "product-form-status";
         } else if (productCount === 0) {
-          statusEl.textContent = "제품명을 쉼표, 줄바꿈, /, ;로 입력하세요";
+          statusEl.textContent = "쉼표, 줄바꿈, /, ;로 제품명을 나눠 입력하세요";
           statusEl.className = "product-form-status";
         } else if (validationState.totalMlError) {
           statusEl.textContent = validationState.totalMlError;
@@ -1701,7 +1724,7 @@
           statusEl.textContent = validationState.perUseMlError;
           statusEl.className = "product-form-status";
         } else {
-          statusEl.textContent = `${productCount}개 제품을 한 번에 추가할 수 있어요`;
+          statusEl.textContent = `${productCount}개 제품이 같은 루틴·용량으로 먼저 등록됩니다`;
           statusEl.className = "product-form-status product-form-status--ready";
         }
       }
@@ -1850,12 +1873,7 @@
       if (ctaConfig.mode === "routine" && ctaConfig.productId) {
         const ctaBtn = document.getElementById("cta-btn");
         triggerButtonPressEffect(ctaBtn, 120);
-        scrollToPriorityProductCard(ctaConfig.productId);
-        if (ctaConfig.routineSession) {
-          await runRoutine(ctaConfig.productId, ctaConfig.routineSession);
-        } else {
-          await applyUsageToProduct(ctaConfig.productId);
-        }
+        scrollToTodayRecordTarget(ctaConfig.productId);
         return;
       }
 
@@ -3687,6 +3705,9 @@
       if (routineGroup) {
         row.dataset.routineGroup = routineGroup;
       }
+      const needsSetup = isProductSetupIncomplete(product);
+      const identityButtonLabel = needsSetup ? "브랜드/제품명 입력" : "상세 입력";
+      const setupButtonLabel = needsSetup ? "잔량/루틴 수정" : "설정 수정";
 
       const titleProductName = getProductIdentityValue(product, "productDisplayName") || product.name || "제품";
       const name = product.brand ? `${titleProductName} (${product.brand})` : titleProductName;
@@ -3743,10 +3764,10 @@
             </div>
             <div class="product-card-edit-actions">
               <button class="btn-secondary product-identity-open-btn" type="button" data-product-id="${product.id}">
-                상세 입력
+                ${identityButtonLabel}
               </button>
               <button class="btn-secondary product-setup-open-btn product-setup-open-btn--compact" type="button" data-product-id="${product.id}">
-                설정 수정
+                ${setupButtonLabel}
               </button>
             </div>
           </div>
@@ -3777,11 +3798,11 @@
               <span class="product-setup-badge">⚠ 설정 필요</span>
               <p>
                 빠른 추가는 공통값으로 먼저 등록돼요<br />
-                등록 후 각 카드에서 브랜드, 잔량, 루틴을 개별 수정할 수 있어요
+                브랜드·제품명은 위 버튼, 잔량·루틴은 아래 버튼에서 제품별로 수정하세요
               </p>
             </div>
             <button class="btn-secondary product-setup-open-btn" type="button" data-product-id="${product.id}">
-              설정 수정
+              잔량/루틴 수정
             </button>
           </div>
           ${getProductSetupEditorMarkup(product)}
@@ -4520,12 +4541,19 @@
       renderActiveProductsList();
     }
 
-    function getTodayPendingProductCount(products = getHomeDisplayProducts()) {
-      const usageState = buildTodayRoutineUsageState(recentUsageEvents);
+    function doesProductNeedTodayRecord(product, usageState = buildTodayRoutineUsageState(recentUsageEvents)) {
+      const statusItems = getProductTodayRoutineStatusItems(product, usageState);
+      return statusItems.length > 0 && statusItems.some((item) => !item.completed);
+    }
+
+    function getTodayPendingProducts(products = getHomeDisplayProducts(), usageState = buildTodayRoutineUsageState(recentUsageEvents)) {
       return products.filter((product) => {
-        const statusItems = getProductTodayRoutineStatusItems(product, usageState);
-        return statusItems.length > 0 && statusItems.some((item) => !item.completed);
-      }).length;
+        return doesProductNeedTodayRecord(product, usageState);
+      });
+    }
+
+    function getTodayPendingProductCount(products = getHomeDisplayProducts()) {
+      return getTodayPendingProducts(products).length;
     }
 
     function getHomeRoutineStreakCount(products = getHomeDisplayProducts()) {
@@ -4571,37 +4599,45 @@
 
     function getHeroPriorityLabel(product) {
       if (!product) return "";
+      if (doesProductNeedTodayRecord(product)) {
+        return "오늘 기록 필요";
+      }
       return hasProductUsageToday(product)
         ? "추가 사용했다면 지금 기록하세요"
-        : "오늘 이 제품 사용 기록하세요";
+        : "오늘 사용했다면 기록하세요";
     }
 
     function getHeroActionUrgencyMessage(product) {
+      if (doesProductNeedTodayRecord(product)) {
+        return "지금 기록 안 하면 소진일이 부정확해져요";
+      }
       if (hasProductUsageToday(product)) {
-        return "방금 더 썼다면 기록해야 잔량과 D-day가 맞아요";
+        return "추가 사용했다면 지금 기록해야 잔량이 맞아요";
       }
       const daysLeft = calculateDaysLeft(product);
       const displayDaysLeft = getDisplayDaysLeft(daysLeft);
       if (displayDaysLeft <= PURCHASE_URGENT_DAYS_THRESHOLD) {
-        return "구매 준비가 급해요. 지금 기록하고 끊기기 전에 확인하세요";
+        return "곧 끊길 수 있어 지금 기록하고 구매 타이밍을 확인하세요";
       }
       if (displayDaysLeft <= SOON_DEPLETION_DAYS_THRESHOLD) {
-        return "곧 떨어질 수 있어요. 오늘 기록하고 구매 타이밍을 확인하세요";
+        return "오늘 기록해야 남은 기간 계산이 더 정확해져요";
       }
       return "사용 직후 기록하면 남은 기간 계산이 바로 맞춰져요";
     }
 
     function getHomePriorityProduct(products = getHomeDisplayProducts()) {
       if (!products.length) return null;
+      const usageState = buildTodayRoutineUsageState(recentUsageEvents);
 
       return products
         .map((product, index) => ({ product, index }))
         .sort((a, b) => {
-          const aDays = calculateDaysLeft(a.product);
-          const bDays = calculateDaysLeft(b.product);
-          const safeADays = Number.isFinite(aDays) ? aDays : Number.MAX_SAFE_INTEGER;
-          const safeBDays = Number.isFinite(bDays) ? bDays : Number.MAX_SAFE_INTEGER;
-          if (safeADays !== safeBDays) return safeADays - safeBDays;
+          const aNeedsRecord = doesProductNeedTodayRecord(a.product, usageState);
+          const bNeedsRecord = doesProductNeedTodayRecord(b.product, usageState);
+          if (aNeedsRecord !== bNeedsRecord) return aNeedsRecord ? -1 : 1;
+
+          const depletionCompare = compareProductsByDepletion(a, b);
+          if (depletionCompare !== 0) return depletionCompare;
 
           const aUsagePriority = hasProductUsageToday(a.product) ? 1 : 0;
           const bUsagePriority = hasProductUsageToday(b.product) ? 1 : 0;
@@ -4630,8 +4666,8 @@
     function getHomePriorityEmptyMarkup() {
       return `
         <article class="home-priority-card home-priority-card--empty">
-          <h4>첫 제품을 추가하면 홈이 자동으로 채워집니다</h4>
-          <p class="home-priority-empty-copy">제품 1개만 등록하면 남은량과 예상 소진일을 바로 계산해드려요.</p>
+          <h4>첫 제품을 추가하고 오늘 기록을 시작하세요</h4>
+          <p class="home-priority-empty-copy">제품 1개만 등록하면 오늘 기록할 위치로 바로 이어집니다.</p>
         </article>
       `;
     }
@@ -4645,35 +4681,17 @@
       const safeRemainingPercent = Number.isFinite(remainingPercent)
         ? Math.max(0, Math.min(100, remainingPercent))
         : 0;
-      const progressTone = getProgressTone(safeRemainingPercent);
 
       return `
         <article class="home-priority-card home-priority-card--${urgencyStatus}" data-product-id="${escapeHtml(product.id)}">
           <div class="home-priority-product">
-            <div class="home-priority-kicker">${escapeHtml(getHeroPriorityLabel(product))}</div>
             <h4 class="home-priority-product-name">${escapeHtml(productName)}</h4>
             ${brandName ? `<p class="home-priority-brand">${escapeHtml(brandName)}</p>` : ""}
+            <p class="home-priority-remaining">남은 ${safeRemainingPercent}%</p>
           </div>
           <div class="home-priority-action">
             <div class="home-priority-dday">${escapeHtml(getProductDdayLabel(daysLeft))}</div>
             <p class="home-priority-message">${escapeHtml(getHeroActionUrgencyMessage(product))}</p>
-          </div>
-          <div class="home-priority-progress-block">
-            <div class="home-priority-progress-label">
-              <span>잔량 기준</span>
-              <strong>${safeRemainingPercent}% 남음</strong>
-            </div>
-            <div
-              class="home-priority-progress ${progressTone.trackClass}"
-              role="progressbar"
-              aria-label="잔량 ${safeRemainingPercent}%"
-              aria-valuemin="0"
-              aria-valuemax="100"
-              aria-valuenow="${safeRemainingPercent}"
-              data-progress-key="home-priority-${escapeHtml(product.id)}"
-            >
-              <span class="progress-fill home-priority-progress-fill ${progressTone.fillClass}"></span>
-            </div>
           </div>
         </article>
       `;
@@ -4768,7 +4786,8 @@
       if (config.disabled) return;
 
       if (config.action === "routine") {
-        await logPriorityProductFromHome();
+        const targetProduct = getTodayFocusProduct();
+        scrollToTodayRecordTarget(targetProduct?.id || "");
         return;
       }
 
@@ -4801,6 +4820,11 @@
         requestAnimationFrame(() => {
           scrollToProductListSection();
         });
+        return;
+      }
+      if (action === "today-record") {
+        const targetProduct = getTodayFocusProduct();
+        scrollToTodayRecordTarget(targetProduct?.id || "");
         return;
       }
       scrollToRoutineSection({ activateRecord: false });
@@ -4847,21 +4871,138 @@
       return PURCHASE_PLATFORM_OPTIONS.find((option) => option.id === marketplace) || null;
     }
 
-    function buildPurchaseSearchUrl(marketplace, productName) {
-      const option = getPurchasePlatformOption(marketplace);
-      const safeProductName = String(productName || "제품").trim() || "제품";
-      return option ? `${option.searchBaseUrl}${encodeURIComponent(safeProductName)}` : "";
+    function getPurchaseProductName(product) {
+      return getProductIdentityValue(product, "productDisplayName") || String(product?.name || "").trim() || "제품";
+    }
+
+    function getPurchaseBrandName(product) {
+      return getProductIdentityValue(product, "brand");
+    }
+
+    function getPurchaseQuery(product) {
+      const brand = getPurchaseBrandName(product);
+      const productName = getPurchaseProductName(product);
+      return [brand, productName].filter(Boolean).join(" ").trim() || "제품";
+    }
+
+    function buildPurchaseSearchUrl(platform, query) {
+      const option = getPurchasePlatformOption(platform);
+      const safeQuery = String(query || "제품").trim() || "제품";
+      return option ? `${option.searchBaseUrl}${encodeURIComponent(safeQuery)}` : "";
     }
 
     function getProductPurchaseLinks(product) {
       return mergePurchaseLinks(product?.purchaseLinks, product?.buyLinks);
     }
 
-    function getProductPurchaseLink(product, marketplace) {
-      if (!product || !getPurchasePlatformOption(marketplace)) return "";
+    function getDirectPurchaseUrl(platform, product) {
+      if (!product || !getPurchasePlatformOption(platform)) return "";
+      // Reserved for affiliate/direct links. For now every platform falls back to search results.
+      return "";
+    }
 
-      const purchaseLinks = getProductPurchaseLinks(product);
-      return purchaseLinks[marketplace] || buildPurchaseSearchUrl(marketplace, product.name);
+    function getPurchaseUrl(platform, product) {
+      if (!product || !getPurchasePlatformOption(platform)) return "";
+
+      const directUrl = getDirectPurchaseUrl(platform, product);
+      return directUrl || buildPurchaseSearchUrl(platform, getPurchaseQuery(product));
+    }
+
+    function getPurchaseEventName(platform) {
+      return `click_purchase_${String(platform || "").trim()}`;
+    }
+
+    function getPurchaseEventParams(product, platform = "") {
+      const daysLeft = calculateDaysLeft(product);
+      const depletionDays = getDisplayDaysLeft(daysLeft);
+      const remainingPercent = Math.round(calculateRemainingPercent(product));
+
+      return {
+        platform,
+        productName: getPurchaseProductName(product),
+        brand: getPurchaseBrandName(product),
+        query: getPurchaseQuery(product),
+        remainingPercent: Number.isFinite(remainingPercent) ? remainingPercent : 0,
+        depletionDays: Number.isFinite(depletionDays) ? depletionDays : 0,
+        dday: getProductDdayLabel(daysLeft)
+      };
+    }
+
+    function sanitizeFirebaseEventParams(params = {}) {
+      return Object.entries(params).reduce((payload, [key, value]) => {
+        const safeKey = String(key || "").trim();
+        if (!safeKey) return payload;
+        if (value === undefined || value === null) return payload;
+        if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+          payload[safeKey] = value;
+        }
+        return payload;
+      }, {});
+    }
+
+    function getCompatFirebaseAnalyticsTracker() {
+      if (!window.firebase || typeof window.firebase.analytics !== "function") return null;
+
+      try {
+        const analytics = window.firebase.analytics();
+        if (!analytics || typeof analytics.logEvent !== "function") return null;
+        return {
+          log(eventName, params) {
+            analytics.logEvent(eventName, params);
+          }
+        };
+      } catch (error) {
+        console.error(error);
+        return null;
+      }
+    }
+
+    function getFirebaseAnalyticsTracker() {
+      const compatTracker = getCompatFirebaseAnalyticsTracker();
+      if (compatTracker) return Promise.resolve(compatTracker);
+      if (firebaseAnalyticsTrackerPromise) return firebaseAnalyticsTrackerPromise;
+
+      firebaseAnalyticsTrackerPromise = (async () => {
+        try {
+          if (!window.COSMETIC_TRACKER_FIREBASE_CONFIG?.measurementId) return null;
+
+          const [clientModule, analyticsModule] = await Promise.all([
+            import("./firebaseClient.js"),
+            import("https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js")
+          ]);
+          const isSupported = typeof analyticsModule.isSupported === "function"
+            ? await analyticsModule.isSupported()
+            : false;
+          if (!isSupported) return null;
+
+          const analytics = analyticsModule.getAnalytics(clientModule.getFirebaseApp());
+          return {
+            log(eventName, params) {
+              analyticsModule.logEvent(analytics, eventName, params);
+            }
+          };
+        } catch (error) {
+          console.error(error);
+          return null;
+        }
+      })();
+
+      return firebaseAnalyticsTrackerPromise;
+    }
+
+    function recordFirebaseClickEvent(eventName, params = {}) {
+      const safeEventName = String(eventName || "").trim();
+      if (!FIREBASE_CLICK_EVENT_NAMES.has(safeEventName)) return;
+
+      const eventParams = sanitizeFirebaseEventParams(params);
+      void getFirebaseAnalyticsTracker()
+        .then((tracker) => {
+          if (!tracker) return;
+          tracker.log(safeEventName, eventParams);
+        })
+        .catch((error) => {
+          console.error(error);
+        });
     }
 
     async function trackPurchaseClick(productName, channel) {
@@ -4906,12 +5047,12 @@
         return;
       }
 
-      productNameEl.textContent = product.name || "제품";
+      productNameEl.textContent = `검색어: ${getPurchaseQuery(product)}`;
       PURCHASE_PLATFORM_OPTIONS.forEach((option) => {
         const buttonEl = actionsEl.querySelector(`[data-purchase-modal-marketplace="${option.id}"]`);
         if (!buttonEl) return;
 
-        const purchaseUrl = getProductPurchaseLink(product, option.id);
+        const purchaseUrl = getPurchaseUrl(option.id, product);
         buttonEl.textContent = option.label;
         buttonEl.disabled = !purchaseUrl;
       });
@@ -4935,6 +5076,7 @@
         : null;
       purchaseOptionsProductId = product.id;
       isPurchaseOptionsModalOpen = true;
+      recordFirebaseClickEvent("click_purchase", getPurchaseEventParams(product));
       renderPurchaseOptionsModal();
 
       requestAnimationFrame(() => {
@@ -4987,7 +5129,7 @@
       const product = activeProducts.find((item) => item.id === productId);
       if (!product) return;
 
-      const url = getProductPurchaseLink(product, marketplace);
+      const url = getPurchaseUrl(marketplace, product);
       if (!url) {
         showToast("구매 링크를 준비하지 못했어요", "제품명을 확인해주세요.", 1600);
         return;
@@ -4997,7 +5139,8 @@
       openedPurchaseMenuSection = "";
       pendingPurchaseMenuFocusTarget = null;
 
-      await trackPurchaseClick(product.name || "제품", marketplace);
+      recordFirebaseClickEvent(getPurchaseEventName(marketplace), getPurchaseEventParams(product, marketplace));
+      void trackPurchaseClick(getPurchaseProductName(product), marketplace);
       window.open(url, "_blank");
       closePurchaseOptionsModal({ restoreFocus: false });
     }
@@ -5367,12 +5510,13 @@
 
     function getTopCtaConfig() {
       const baseConfig = {
-        priorityLabel: "",
+        priorityLabel: "지금 할 일",
+        title: "첫 제품 추가하고 기록 시작",
         text: "첫 제품",
         subtext: "D-day",
-        helperText: "누르면 제품 추가 입력란으로 이동해요",
-        buttonLabel: "제품 추가하고 오늘 기록 시작하기",
-        note: "",
+        helperText: "제품명만 입력하면 바로 기록할 수 있어요",
+        buttonLabel: "지금 사용 기록하기",
+        note: "버튼을 누르면 제품 추가 영역으로 이동합니다",
         mode: "add-product",
         disabled: false
       };
@@ -5381,11 +5525,12 @@
         const demoItem = getDemoModeSoonDepletionItems()[0] || LANDING_DEMO_DEPLETION_ITEMS[0];
         return {
           ...baseConfig,
-          priorityLabel: "오늘 이 제품 사용 기록하세요",
+          title: "오늘 1개 제품 사용 기록 필요",
           text: demoItem?.name || "수분 세럼",
           subtext: getSoonDepletionDdayLabel(demoItem?.daysLeft ?? 3),
-          helperText: "지금 누르면 사용 기록 흐름을 체험해요",
+          helperText: "지금 기록하면 소진일이 더 정확해져요",
           buttonLabel: "지금 사용 기록하기",
+          note: "버튼을 누르면 아래 제품 리스트로 이동합니다",
           mode: "demo"
         };
       }
@@ -5393,6 +5538,7 @@
       if (isLoadingProductCollection) {
         return {
           ...baseConfig,
+          title: "오늘 할 일을 불러오는 중",
           text: "불러오는 중",
           subtext: "D-day",
           helperText: "",
@@ -5410,19 +5556,24 @@
         };
       }
 
-      const productName = priorityProduct.brand
-        ? `${priorityProduct.name} (${priorityProduct.brand})`
-        : priorityProduct.name;
+      const productName = getProductIdentityValue(priorityProduct, "productDisplayName") || priorityProduct.name || "제품";
       const daysLeft = calculateDaysLeft(priorityProduct);
       const routineSession = getPriorityProductRoutineSession(priorityProduct);
+      const pendingCount = getTodayPendingProductCount();
+      const needsRecord = doesProductNeedTodayRecord(priorityProduct);
 
       return {
         ...baseConfig,
-        priorityLabel: getHeroPriorityLabel(priorityProduct),
+        title: pendingCount > 0
+          ? `오늘 ${pendingCount}개 제품 사용 기록 필요`
+          : "추가 사용했다면 지금 기록하세요",
         text: productName || "제품",
         subtext: getProductDdayLabel(daysLeft),
-        helperText: "지금 누르면 오늘 사용으로 기록되고 잔량과 D-day가 바로 업데이트돼요",
+        helperText: needsRecord
+          ? "지금 기록하면 소진일이 더 정확해져요"
+          : "사용했다면 카드에서 기록하세요",
         buttonLabel: "지금 사용 기록하기",
+        note: "버튼을 누르면 아래 제품 리스트로 이동합니다",
         mode: "routine",
         productId: priorityProduct.id,
         routineSession
@@ -5432,35 +5583,21 @@
     function getTopSecondaryActionConfig() {
       if (isDemoMode()) {
         return {
-          label: "오늘 루틴 보기",
+          label: "제품 추가",
           action: "demo",
           disabled: false
         };
       }
       if (isLoadingProductCollection) {
         return {
-          label: "불러오는 중",
+          label: "제품 추가",
           action: "loading",
           disabled: true
         };
       }
-      if (getActualActiveProductCount() <= 0) {
-        return {
-          label: "제품 추가하기",
-          action: "add-product",
-          disabled: false
-        };
-      }
-      if (getSoonDepletionProductCount() > 0) {
-        return {
-          label: "곧 떨어지는 제품 보기",
-          action: "soon-depletion",
-          disabled: false
-        };
-      }
       return {
-        label: "오늘 루틴 보기",
-        action: "routine",
+        label: "제품 추가",
+        action: "add-product",
         disabled: false
       };
     }
@@ -5468,6 +5605,7 @@
     function renderTopCta() {
       const reminderEl = document.getElementById("today-cta");
       const labelEl = document.getElementById("topCtaLabel");
+      const titleEl = document.getElementById("topCtaTitle");
       const textEl = document.getElementById("topCtaText");
       const subtextEl = document.getElementById("topCtaSubtext");
       const helperEl = document.getElementById("topCtaHelper");
@@ -5484,6 +5622,9 @@
       if (labelEl) {
         labelEl.textContent = ctaConfig.priorityLabel || "";
         labelEl.classList.toggle("hidden", !ctaConfig.priorityLabel);
+      }
+      if (titleEl) {
+        titleEl.textContent = ctaConfig.title || ctaConfig.buttonLabel;
       }
       if (textEl) {
         textEl.textContent = ctaConfig.text;
@@ -6727,7 +6868,7 @@
       const quickSettings = getQuickAddSettingsValidationState();
       const productNames = updateQuickAddButtonState(getQuickProductNames(), quickSettings);
       if (productNames.length === 0) {
-        showToast("제품명을 입력해주세요", "한 줄에 제품 하나씩 입력하세요", 1800);
+        showToast("제품명을 입력해주세요", "쉼표, 줄바꿈, /로 여러 제품을 나눠 입력할 수 있어요", 1800);
         const textareaEl = document.getElementById("quickProductNames");
         if (textareaEl) textareaEl.focus();
         return;
@@ -6811,7 +6952,7 @@
         showRecentProductCreationGuide(createdProductIds[0]);
         await setActiveScreen("home");
         await renderActiveProducts();
-        showToast(`${createdProductIds.length}개 제품이 등록되었어요`, "빠른 추가는 공통값으로 먼저 등록돼요. 등록 후 각 카드에서 브랜드, 잔량, 루틴을 개별 수정할 수 있어요", PRODUCT_ADD_SUCCESS_TOAST_DURATION_MS, {
+        showToast(`${createdProductIds.length}개 제품이 공통값으로 등록되었어요`, "각 카드에서 브랜드·제품명과 잔량·루틴을 개별 수정할 수 있어요", PRODUCT_ADD_SUCCESS_TOAST_DURATION_MS, {
           variant: "success",
           placement: "top"
         });
@@ -7936,6 +8077,10 @@
           return;
         }
         triggerButtonPressEffect(routineGroupUseBtn);
+        recordFirebaseClickEvent("click_use_product", {
+          source: "routine_group",
+          routine_session: routineType
+        });
         await completeRoutine(routineType, selectedProductIds);
         return;
       }
@@ -7987,6 +8132,9 @@
       if (useBtn) {
         triggerButtonPressEffect(useBtn, 120);
         const id = useBtn.getAttribute("data-product-id");
+        recordFirebaseClickEvent("click_use_product", {
+          source: "product_card"
+        });
         await applyUsageToProduct(id);
         return;
       }
@@ -7996,6 +8144,10 @@
         triggerButtonPressEffect(routineUseBtn);
         const id = routineUseBtn.getAttribute("data-product-id");
         const sessionType = routineUseBtn.getAttribute("data-routine-session");
+        recordFirebaseClickEvent("click_use_product", {
+          source: "product_card_routine",
+          routine_session: sessionType
+        });
         await runRoutine(id, sessionType);
         return;
       }
@@ -8099,6 +8251,10 @@
         const productId = homePriorityActionBtn.getAttribute("data-product-id");
         const routineSession = homePriorityActionBtn.getAttribute("data-routine-session");
         triggerButtonPressEffect(homePriorityActionBtn, 120);
+        recordFirebaseClickEvent("click_use_product", {
+          source: "home_priority",
+          routine_session: routineSession || ""
+        });
         if (routineSession) {
           await runRoutine(productId, routineSession);
           return;
@@ -8170,17 +8326,33 @@
       });
 
       document.getElementById("googleLoginBtn")?.addEventListener("click", async () => {
+        recordFirebaseClickEvent("click_login", {
+          method: "google",
+          source: "landing"
+        });
         await handleGoogleStartFlow();
       });
       document.getElementById("navGoogleLoginBtn")?.addEventListener("click", async () => {
+        recordFirebaseClickEvent("click_login", {
+          method: "google",
+          source: "nav"
+        });
         await startGoogleLogin();
       });
 
       document.getElementById("dataSafetyNoticeLoginBtn").addEventListener("click", async () => {
+        recordFirebaseClickEvent("click_login", {
+          method: "google",
+          source: "data_safety"
+        });
         await startGoogleLogin();
       });
 
       document.getElementById("anonLoginBtn")?.addEventListener("click", async () => {
+        recordFirebaseClickEvent("click_login", {
+          method: "anonymous",
+          source: "landing"
+        });
         await handleLandingPrimaryCta();
       });
 
@@ -8284,8 +8456,18 @@
 
         removeQuickAddPreviewItem(removeBtn.getAttribute("data-quick-add-remove-index"));
       });
-      document.getElementById("quickAddProductsBtn")?.addEventListener("click", addQuickProducts);
-      document.getElementById("addProductBtn").addEventListener("click", addProduct);
+      document.getElementById("quickAddProductsBtn")?.addEventListener("click", async () => {
+        recordFirebaseClickEvent("click_add_product", {
+          mode: "quick"
+        });
+        await addQuickProducts();
+      });
+      document.getElementById("addProductBtn").addEventListener("click", async () => {
+        recordFirebaseClickEvent("click_add_product", {
+          mode: "single"
+        });
+        await addProduct();
+      });
       document.getElementById("productEmptyStateCta").addEventListener("click", async () => {
         if (isDemoMode()) {
           showDemoModeLockedToast();
@@ -8319,6 +8501,9 @@
         await run();
       });
       document.getElementById("firstProductUseCta").addEventListener("click", async () => {
+        recordFirebaseClickEvent("click_use_product", {
+          source: "first_product_modal"
+        });
         await handleFirstProductUseCta();
       });
       document.getElementById("firstProductLaterCta").addEventListener("click", () => {
@@ -8390,10 +8575,18 @@
       setProductAddMode("single");
       updateRoutineFrequencyFieldVisibility();
       document.getElementById("completeMorningRoutineBtn").addEventListener("click", async () => {
+        recordFirebaseClickEvent("click_use_product", {
+          source: "routine_summary",
+          routine_session: "morning"
+        });
         triggerButtonPressEffect(document.getElementById("completeMorningRoutineBtn"));
         await completeRoutine("morning");
       });
       document.getElementById("completeEveningRoutineBtn").addEventListener("click", async () => {
+        recordFirebaseClickEvent("click_use_product", {
+          source: "routine_summary",
+          routine_session: "evening"
+        });
         triggerButtonPressEffect(document.getElementById("completeEveningRoutineBtn"));
         await completeRoutine("evening");
       });

@@ -121,13 +121,13 @@
       </div>
       <div id="purchaseOptionsModalActions" class="purchase-options-modal-actions">
         <button class="purchase-options-modal-btn purchase-options-modal-btn--coupang" type="button" data-purchase-modal-marketplace="coupang">
-          쿠팡
+          쿠팡에서 보기
         </button>
         <button class="purchase-options-modal-btn purchase-options-modal-btn--naver" type="button" data-purchase-modal-marketplace="naver">
-          네이버
+          네이버쇼핑에서 보기
         </button>
         <button class="purchase-options-modal-btn purchase-options-modal-btn--oliveyoung" type="button" data-purchase-modal-marketplace="oliveyoung">
-          올리브영
+          올리브영에서 보기
         </button>
       </div>
     </div>
@@ -236,7 +236,7 @@
         <div class="home-section-heading">
           <div>
             <div class="today-status-eyebrow">오늘 할 일</div>
-            <h3>지금 할 일을 바로 처리하세요</h3>
+            <h3>오늘 해야 할 일</h3>
           </div>
         </div>
         <div class="today-action-hub">
@@ -257,7 +257,8 @@
           <div id="activeTodayCtaSection" class="active-cta-section" aria-label="오늘 할 일 실행">
             <div id="today-cta" class="home-primary-cta today-action-panel" aria-hidden="false">
               <div class="today-action-copy">
-                <strong>지금 기록하면 소진일이 더 정확해져요</strong>
+                <span id="topCtaLabel" class="home-priority-kicker hidden"></span>
+                <strong id="topCtaTitle">지금 사용 기록하기</strong>
                 <p id="topCtaHelper" class="cta-helper hidden"></p>
               </div>
               <div class="today-action-buttons">
@@ -267,8 +268,8 @@
               <p id="topCtaNote" class="cta-note hidden" aria-live="polite"></p>
             </div>
           </div>
-          <div class="today-representative-block" aria-label="가장 먼저 확인할 제품">
-            <div class="today-representative-label">가장 먼저 확인할 제품</div>
+          <div class="today-representative-block" aria-label="가장 급한 제품 1개">
+            <div class="today-representative-label">가장 급한 제품 1개</div>
             <div id="soonDepletionList"></div>
           </div>
         </div>
@@ -351,8 +352,8 @@
             </div>
             <div id="quickAddPanel" class="quick-add-panel hidden" role="tabpanel" aria-labelledby="quickAddModeBtn" aria-hidden="true" hidden>
               <div class="quick-add-copy">
-                <label for="quickProductNames" class="field-label">빠른 추가 모드</label>
-                <p class="usage-input-help">쉼표, 줄바꿈, /, ;로 여러 제품을 한 번에 등록해요</p>
+                <label for="quickProductNames" class="field-label">빠른 추가 - 공통값 등록</label>
+                <p class="usage-input-help">제품명은 쉼표, 줄바꿈, /, ;로 나누고 루틴·용량은 공통값으로 먼저 등록해요</p>
               </div>
               <textarea
                 id="quickProductNames"
@@ -440,13 +441,13 @@
                   <p id="quickAddPerUseMlError" class="usage-input-error hidden" aria-live="polite"></p>
                 </div>
                 <p id="quickAddHelp" class="usage-input-help">
-                  빠른 추가는 공통값으로 먼저 등록돼요<br />
-                  등록 후 각 카드에서 브랜드, 잔량, 루틴을 개별 수정할 수 있어요
+                  등록 후 생성된 각 카드에서<br />
+                  브랜드·제품명은 '브랜드/제품명 입력', 잔량·루틴은 '잔량/루틴 수정'으로 개별 수정하세요
                 </p>
               </div>
               <div class="quick-add-actions">
                 <button id="quickAddProductsBtn" class="product-submit-btn quick-add-submit-btn" type="button" disabled>한 번에 추가</button>
-                <p id="quickAddStatus" class="product-form-status" aria-live="polite">제품명을 쉼표, 줄바꿈, /, ;로 입력하세요</p>
+                <p id="quickAddStatus" class="product-form-status" aria-live="polite">쉼표, 줄바꿈, /, ;로 제품명을 나눠 입력하세요</p>
               </div>
             </div>
             <div id="productInputContainer" class="inline-form" role="tabpanel" aria-labelledby="singleAddModeBtn">
