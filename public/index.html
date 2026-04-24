@@ -240,7 +240,25 @@
           </div>
         </div>
         <div class="today-action-hub">
+          <div id="activeTodayCtaSection" class="active-cta-section" aria-label="오늘 할 일 실행">
+            <div id="today-cta" class="home-primary-cta today-action-panel" aria-hidden="false">
+              <div class="today-action-copy">
+                <strong id="topCtaTitle">오늘 사용한 제품 지금 기록하세요</strong>
+                <p id="topCtaHelper" class="cta-helper hidden"></p>
+              </div>
+              <div class="today-action-buttons">
+                <button id="cta-btn" type="button" data-action="add-product">지금 기록하기</button>
+                <button id="topSecondaryActionBtn" class="top-secondary-action-btn" type="button" data-action="add-product">제품 추가</button>
+              </div>
+              <p id="topCtaNote" class="cta-note" aria-live="polite">지금 기록 안 하면 계산이 어긋나요</p>
+            </div>
+          </div>
+          <div class="today-representative-block" aria-label="가장 급한 제품 1개">
+            <div class="today-representative-label">대표 제품 1개</div>
+            <div id="soonDepletionList"></div>
+          </div>
           <div id="homeStatusSummary" class="home-status-summary today-action-hub-summary" aria-label="오늘 할 일 요약">
+            <div class="today-summary-heading">오늘 요약</div>
             <article class="home-status-stat">
               <span class="home-status-stat-label">오늘 기록 필요</span>
               <strong id="homePendingRoutineCount">0개</strong>
@@ -253,24 +271,6 @@
               <span class="home-status-stat-label">연속 기록</span>
               <strong id="homeRoutineStreakCount">0일</strong>
             </article>
-          </div>
-          <div id="activeTodayCtaSection" class="active-cta-section" aria-label="오늘 할 일 실행">
-            <div id="today-cta" class="home-primary-cta today-action-panel" aria-hidden="false">
-              <div class="today-action-copy">
-                <span id="topCtaLabel" class="home-priority-kicker hidden"></span>
-                <strong id="topCtaTitle">지금 사용 기록하기</strong>
-                <p id="topCtaHelper" class="cta-helper hidden"></p>
-              </div>
-              <div class="today-action-buttons">
-                <button id="cta-btn" type="button" data-action="add-product">지금 사용 기록하기</button>
-                <button id="topSecondaryActionBtn" class="top-secondary-action-btn" type="button" data-action="routine">오늘 루틴 보기</button>
-              </div>
-              <p id="topCtaNote" class="cta-note hidden" aria-live="polite"></p>
-            </div>
-          </div>
-          <div class="today-representative-block" aria-label="가장 급한 제품 1개">
-            <div class="today-representative-label">가장 급한 제품 1개</div>
-            <div id="soonDepletionList"></div>
           </div>
         </div>
         <p id="soonDepletionNote" class="soon-depletion-note hidden">보이는 D-day는 실제 제품 등록 후 자동으로 내 데이터로 바뀝니다</p>
