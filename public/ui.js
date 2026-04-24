@@ -66,6 +66,7 @@
     const PRODUCT_DETAIL_LOG_LIMIT = 6;
     const HOME_PRODUCT_PREVIEW_LIMIT = 4;
     const ACTIVE_VIEW_STORAGE_KEY = "cosmeticTrackerActiveView";
+    const VISIT_LOG_STORAGE_KEY = "visit_logged_today";
     const ROUTINE_STREAK_STORAGE_KEY = "cosmeticTrackerRoutineStreak";
     const ROUTINE_DAILY_STREAK_STORAGE_KEY = "cosmeticTrackerDailyRoutineStreak";
     const USAGE_ACTION_LOCK_MS = 1000;
@@ -715,14 +716,14 @@
 
     function getProgressTone(percent) {
       const safePct = normalizePercentValue(percent, 0);
-      if (safePct >= 70) {
+      if (safePct >= 50) {
         return {
           trackClass: "progress-track--safe",
           fillClass: "progress-fill--safe",
           textClass: "progress-text--safe"
         };
       }
-      if (safePct >= 30) {
+      if (safePct >= 20) {
         return {
           trackClass: "progress-track--warning",
           fillClass: "progress-fill--warning",
@@ -890,6 +891,197 @@
       }
       await deleteFirestoreQueryDocs(getUsageLogRef().where("ownerId", "==", uid));
       await userRef.delete();
+    }
+
+    function normalizeVisitTrackingText(value, fallback = "") {
+      const normalized = String(value || "").trim();
+      return normalized || fallback;
+    }
+
+    function getVisitLoggedDate(date = new Date()) {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+
+    function getVisitReadableTime(date = new Date()) {
+      return date.toLocaleString("ko-KR", { timeZone: "Asia/Seoul" });
+    }
+
+    function getVisitQueryContext() {
+      return {
+        utmSource: normalizeVisitTrackingText(queryParams.get("utm_source")),
+        utmMedium: normalizeVisitTrackingText(queryParams.get("utm_medium")),
+        utmCampaign: normalizeVisitTrackingText(queryParams.get("utm_campaign")),
+        utmContent: normalizeVisitTrackingText(queryParams.get("utm_content")),
+        ref: normalizeVisitTrackingText(queryParams.get("ref")),
+        legacySource: normalizeVisitTrackingText(queryParams.get("source")),
+        hasTestParam: queryParams.has("test"),
+        hasInternalParam: queryParams.has("internal"),
+        isInternalTest: queryParams.get("test") === "1" || queryParams.get("internal") === "1"
+      };
+    }
+
+    function getVisitSourceFromReferrer(referrer = document.referrer) {
+      const safeReferrer = normalizeVisitTrackingText(referrer);
+      if (!safeReferrer) return "direct";
+
+      const referrerText = safeReferrer.toLowerCase();
+      if (referrerText.includes("instagram")) return "instagram";
+      if (referrerText.includes("naver")) return "naver";
+      if (referrerText.includes("google")) return "google";
+      if (referrerText.includes("dcinside")) return "dcinside";
+
+      try {
+        const hostname = new URL(safeReferrer).hostname.replace(/^www\./i, "");
+        return normalizeVisitTrackingText(hostname, "referral");
+      } catch (error) {
+        return "referral";
+      }
+    }
+
+    function resolveVisitSource(visitContext = getVisitQueryContext()) {
+      if (visitContext.utmSource) return visitContext.utmSource;
+      if (visitContext.ref) return visitContext.ref;
+      if (visitContext.legacySource) return visitContext.legacySource;
+      return getVisitSourceFromReferrer(document.referrer);
+    }
+
+    function shouldBypassVisitLogCache(visitContext = getVisitQueryContext()) {
+      return Boolean(
+        visitContext.utmSource
+        || visitContext.utmMedium
+        || visitContext.utmCampaign
+        || visitContext.ref
+        || visitContext.hasTestParam
+        || visitContext.hasInternalParam
+      );
+    }
+
+    function shouldUseVisitLogCache(visitContext = getVisitQueryContext()) {
+      return !shouldBypassVisitLogCache(visitContext) && resolveVisitSource(visitContext) === "direct";
+    }
+
+    function getVisitUserContext(user = null) {
+      const uid = normalizeVisitTrackingText(user?.uid);
+      return {
+        isAnonymous: user?.isAnonymous === true,
+        uid: uid || null
+      };
+    }
+
+    function shouldSkipVisitLogging() {
+      const hostname = String(window.location.hostname || "").trim().toLowerCase();
+      return isDemoMode() || hostname === "localhost" || hostname === "127.0.0.1";
+    }
+
+    function buildVisitLogPayload(user = null, options = {}) {
+      const loggedDate = normalizeVisitTrackingText(options.loggedDate, getVisitLoggedDate());
+      const readableTime = normalizeVisitTrackingText(options.readableTime, getVisitReadableTime());
+      const visitContext = getVisitQueryContext();
+      const { isAnonymous, uid } = getVisitUserContext(user);
+      const basePayload = {
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        page: window.location.pathname,
+        source: resolveVisitSource(visitContext),
+        referrer: document.referrer || "",
+        userAgent: navigator.userAgent || "",
+        language: navigator.language || "",
+        isAnonymous,
+        uid,
+        loggedDate
+      };
+      const payloadWithReadableTime = options.includeReadableTime
+        ? {
+            ...basePayload,
+            readableTime
+          }
+        : basePayload;
+
+      if (!options.includeAttributionFields) {
+        return payloadWithReadableTime;
+      }
+
+      return {
+        ...payloadWithReadableTime,
+        utmSource: visitContext.utmSource,
+        utmMedium: visitContext.utmMedium,
+        utmCampaign: visitContext.utmCampaign,
+        utmContent: visitContext.utmContent,
+        ref: visitContext.ref,
+        isInternalTest: visitContext.isInternalTest
+      };
+    }
+
+    async function logVisitOnce(user = currentUser) {
+      if (!db || shouldSkipVisitLogging()) return;
+
+      const loggedDate = getVisitLoggedDate();
+      const visitContext = getVisitQueryContext();
+      const shouldUseCache = shouldUseVisitLogCache(visitContext);
+
+      if (shouldUseCache) {
+        try {
+          const lastLoggedDate = window.localStorage.getItem(VISIT_LOG_STORAGE_KEY);
+          if (lastLoggedDate === loggedDate) {
+            return;
+          }
+        } catch (error) {
+          console.warn("Unable to read visit log cache.", error);
+        }
+      }
+
+      let primedCache = false;
+      if (shouldUseCache) {
+        try {
+          window.localStorage.setItem(VISIT_LOG_STORAGE_KEY, loggedDate);
+          primedCache = true;
+        } catch (error) {
+          console.warn("Unable to prime visit log cache.", error);
+        }
+      }
+
+      try {
+        await db.collection("visits").add(buildVisitLogPayload(user, {
+          loggedDate,
+          readableTime: getVisitReadableTime(),
+          includeAttributionFields: true,
+          includeReadableTime: true
+        }));
+        return;
+      } catch (error) {
+        console.warn("Unable to store enhanced visit log.", error);
+      }
+
+      try {
+        await db.collection("visits").add(buildVisitLogPayload(user, {
+          loggedDate,
+          readableTime: getVisitReadableTime(),
+          includeAttributionFields: false,
+          includeReadableTime: true
+        }));
+        return;
+      } catch (error) {
+        console.warn("Unable to store visit log with readable time.", error);
+      }
+
+      try {
+        await db.collection("visits").add(buildVisitLogPayload(user, {
+          loggedDate,
+          includeAttributionFields: false,
+          includeReadableTime: false
+        }));
+      } catch (error) {
+        console.warn("Unable to store fallback visit log.", error);
+        if (primedCache) {
+          try {
+            window.localStorage.removeItem(VISIT_LOG_STORAGE_KEY);
+          } catch (cacheError) {
+            console.warn("Unable to clear visit log cache.", cacheError);
+          }
+        }
+      }
     }
 
     function getActualActiveProductCount(products = activeProducts) {
@@ -5117,22 +5309,68 @@
         });
     }
 
-    async function trackPurchaseClick(productId, productName, platform) {
+    function calculatePurchaseIntentScore({ daysLeft, remainingPercent } = {}) {
+      const safeDaysLeft = Number.isFinite(Number(daysLeft)) ? Number(daysLeft) : Number.MAX_SAFE_INTEGER;
+      const safeRemainingPercent = Number.isFinite(Number(remainingPercent))
+        ? Number(remainingPercent)
+        : Number.MAX_SAFE_INTEGER;
+      let score = 20;
+
+      if (safeDaysLeft <= 3) {
+        score += 40;
+      } else if (safeDaysLeft <= 7) {
+        score += 30;
+      } else if (safeDaysLeft <= 14) {
+        score += 20;
+      } else {
+        score += 10;
+      }
+
+      if (safeRemainingPercent <= 5) {
+        score += 30;
+      } else if (safeRemainingPercent <= 10) {
+        score += 25;
+      } else if (safeRemainingPercent <= 20) {
+        score += 15;
+      } else {
+        score += 5;
+      }
+
+      return Math.min(score, 100);
+    }
+
+    function getPurchaseIntentLevel(intentScore) {
+      const safeIntentScore = Number(intentScore);
+      if (safeIntentScore >= 80) return "hot";
+      if (safeIntentScore >= 50) return "warm";
+      return "low";
+    }
+
+    async function trackPurchaseClick(productId, productName, platform, product = null) {
       const safeProductId = String(productId || "").trim();
       const safeProductName = String(productName || "").trim();
       const safePlatform = getPurchasePlatformOption(platform)?.id || "";
+      const resolvedProduct = resolvePurchaseProduct(product) || resolvePurchaseProduct(productId);
       if (!safeProductId || !safeProductName || !safePlatform || !db) return;
 
-      try {
-        await db.collection("purchase_clicks").add({
-          productId: safeProductId,
-          productName: safeProductName,
-          platform: safePlatform,
-          timestamp: new Date().toISOString()
-        });
-      } catch (error) {
-        console.error(error);
-      }
+      const daysLeft = resolvedProduct ? getDisplayDaysLeft(calculateDaysLeft(resolvedProduct)) : 0;
+      const remainingPercent = resolvedProduct
+        ? Math.round(calculateRemainingPercent(resolvedProduct))
+        : 0;
+      const intentScore = calculatePurchaseIntentScore({ daysLeft, remainingPercent });
+      const intentLevel = getPurchaseIntentLevel(intentScore);
+
+      await db.collection("purchase_clicks").add({
+        productId: safeProductId,
+        productName: safeProductName,
+        platform: safePlatform,
+        timestamp: new Date().toISOString(),
+        daysLeft: Number.isFinite(daysLeft) ? daysLeft : 0,
+        remainingPercent: Number.isFinite(remainingPercent) ? remainingPercent : 0,
+        source: "product_card_purchase",
+        intentScore,
+        intentLevel
+      });
     }
 
     function setPurchaseOptionsModalVisibility(isVisible) {
@@ -5282,9 +5520,9 @@
       recordFirebaseClickEvent(getPurchaseEventName(safePlatform), getPurchaseEventParams(product, safePlatform));
 
       try {
-        await trackPurchaseClick(product.id, getPurchaseProductName(product), safePlatform);
+        await trackPurchaseClick(product.id, getPurchaseProductName(product), safePlatform, product);
       } catch (error) {
-        console.error(error);
+        console.warn("Unable to store purchase_clicks log.", error);
       }
 
       openPurchaseDestination(product, safePlatform, options);
@@ -8846,6 +9084,7 @@
       auth.onAuthStateChanged(async (user) => {
         currentUser = user;
         currentUid = user ? user.uid : null;
+        void logVisitOnce(user);
         activeProducts = [];
         hasRegisteredProducts = false;
         isLoadingProductCollection = Boolean(user);

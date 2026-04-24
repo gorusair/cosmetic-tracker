@@ -6396,6 +6396,61 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
   transition: color 220ms ease;
 }
 
+.product-row .progress-track {
+  border-color: rgba(194, 154, 166, 0.26);
+  background: linear-gradient(180deg, rgba(250, 247, 248, 0.98) 0%, rgba(248, 235, 239, 0.94) 100%);
+  box-shadow: inset 0 1px 2px rgba(115, 86, 95, 0.08);
+}
+
+.product-row .progress-track--safe {
+  border-color: rgba(40, 137, 82, 0.34);
+  background: linear-gradient(180deg, rgba(232, 247, 237, 0.98) 0%, rgba(216, 242, 225, 0.94) 100%);
+}
+
+.product-row .progress-track--warning {
+  border-color: rgba(219, 123, 23, 0.36);
+  background: linear-gradient(180deg, rgba(255, 245, 224, 0.98) 0%, rgba(255, 235, 196, 0.94) 100%);
+}
+
+.product-row .progress-track--danger {
+  border-color: rgba(188, 40, 56, 0.42);
+  background: linear-gradient(180deg, rgba(255, 233, 236, 0.98) 0%, rgba(255, 215, 221, 0.95) 100%);
+  box-shadow:
+    inset 0 1px 2px rgba(142, 27, 47, 0.12),
+    0 0 0 1px rgba(188, 40, 56, 0.06);
+}
+
+.product-row .progress-fill {
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.product-row .progress-fill--safe,
+.product-row .progress-fill.good {
+  background: linear-gradient(180deg, #39b86d 0%, #1e8b51 100%);
+}
+
+.product-row .progress-fill--warning,
+.product-row .progress-fill.warning {
+  background: linear-gradient(180deg, #f6b227 0%, #d97706 100%);
+}
+
+.product-row .progress-fill--danger,
+.product-row .progress-fill.danger {
+  background: linear-gradient(180deg, #ef5350 0%, #c62839 100%);
+}
+
+.product-progress-percent.progress-text--safe {
+  color: #1f8a4f;
+}
+
+.product-progress-percent.progress-text--warning {
+  color: #b05b05;
+}
+
+.product-progress-percent.progress-text--danger {
+  color: #bc2838;
+}
+
 .product-result-summary {
   display: flex;
   align-items: center;
