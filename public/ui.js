@@ -5243,7 +5243,7 @@
       return activeProducts.find((item) => item.id === safeProductId) || null;
     }
 
-    async function openPurchaseDestination(productOrId, marketplace, options = {}) {
+    function openPurchaseDestination(productOrId, marketplace, options = {}) {
       if (isDemoMode()) {
         showDemoModeLockedToast("데모 모드에서는 구매 동작도 고정됩니다.");
         return;
@@ -5263,16 +5263,35 @@
       openedPurchaseMenuSection = "";
       pendingPurchaseMenuFocusTarget = null;
 
-      recordFirebaseClickEvent(getPurchaseEventName(safePlatform), getPurchaseEventParams(product, safePlatform));
-      await trackPurchaseClick(product.id, getPurchaseProductName(product), safePlatform);
       window.open(url, "_blank");
       if (options.closeModal !== false) {
         closePurchaseOptionsModal({ restoreFocus: false });
       }
     }
 
+    async function handlePurchasePlatformClick(productOrId, marketplace, options = {}) {
+      if (isDemoMode()) {
+        showDemoModeLockedToast("데모 모드에서는 구매 동작도 고정됩니다.");
+        return;
+      }
+
+      const safePlatform = getPurchasePlatformOption(marketplace)?.id || "";
+      const product = resolvePurchaseProduct(productOrId);
+      if (!product || !safePlatform) return;
+
+      recordFirebaseClickEvent(getPurchaseEventName(safePlatform), getPurchaseEventParams(product, safePlatform));
+
+      try {
+        await trackPurchaseClick(product.id, getPurchaseProductName(product), safePlatform);
+      } catch (error) {
+        console.error(error);
+      }
+
+      openPurchaseDestination(product, safePlatform, options);
+    }
+
     async function handlePurchaseOptionSelection(productId, marketplace) {
-      await openPurchaseDestination(productId, marketplace, { closeModal: true });
+      await handlePurchasePlatformClick(productId, marketplace, { closeModal: true });
     }
 
     function focusPurchaseMenuIfNeeded() {
@@ -8282,7 +8301,8 @@
         triggerButtonPressEffect(purchaseQuickLinkBtn, 120);
         const id = purchaseQuickLinkBtn.getAttribute("data-product-id");
         const platform = purchaseQuickLinkBtn.getAttribute("data-platform");
-        await openPurchaseDestination(id, platform, { closeModal: false });
+        const product = resolvePurchaseProduct(id);
+        await handlePurchasePlatformClick(product, platform, { closeModal: false });
         return;
       }
 
