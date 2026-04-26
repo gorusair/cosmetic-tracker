@@ -648,6 +648,9 @@ textarea {
   width: 100%;
   max-width: 100%;
   margin: 0 auto;
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
   opacity: 1;
   transform: translateY(0);
   max-height: 1500px;
@@ -837,6 +840,40 @@ textarea {
   max-height: 0;
   overflow: hidden;
   pointer-events: none;
+}
+
+.product-form-shell,
+.product-form-shell * {
+  pointer-events: auto;
+}
+
+.product-form-shell--collapsed,
+.product-form-shell--collapsed * {
+  pointer-events: none;
+}
+
+#sampleBannerMount,
+#productEmptyState {
+  position: relative;
+  z-index: 1;
+}
+
+.product-form-submit,
+#productInputContainer,
+#addProductBtn {
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+}
+
+#productInputContainer input,
+#productInputContainer select,
+#productInputContainer button,
+#quickAddPanel input,
+#quickAddPanel select,
+#quickAddPanel textarea,
+#quickAddPanel button {
+  pointer-events: auto;
 }
 
 .primary-app-sections {
@@ -4707,6 +4744,16 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
   box-shadow: 0 10px 22px rgba(186, 140, 68, 0.08);
 }
 
+.product-row.card-danger {
+  border: 1.5px solid #fecaca;
+  background: #fff5f5;
+  transition:
+    border-color 0.3s ease,
+    box-shadow 0.3s ease,
+    background-color 0.3s ease,
+    transform 180ms ease;
+}
+
 @keyframes product-row-appear {
   0% {
     opacity: 0;
@@ -5554,6 +5601,20 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
   border-top: 1px solid rgba(232, 222, 238, 0.82);
 }
 
+.sample-product-note {
+  grid-column: 1 / -1;
+  margin: 2px 0 0;
+  padding: 10px 12px;
+  border: 1px solid #ebd6ba;
+  border-radius: 12px;
+  background: rgba(255, 251, 244, 0.92);
+  color: #7b6244;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.5;
+  text-align: center;
+}
+
 .product-next-step-guide {
   grid-column: 1 / -1;
   width: 100%;
@@ -5860,9 +5921,18 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
 
 .purchase-recommendation-title {
   display: none;
+  order: 2;
+  margin-top: -2px;
+  margin-bottom: 0;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  text-align: center;
 }
 
 .purchase-recommendation-sub {
+  order: 1;
   margin-top: 0;
   margin-bottom: 0;
   font-size: 13px;
@@ -5875,6 +5945,7 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
 }
 
 .purchase-recommendation-note {
+  order: 4;
   margin-top: 6px;
   font-size: 11px;
   line-height: 1.45;
@@ -5885,6 +5956,7 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
 }
 
 .purchase-quick-links {
+  order: 5;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
   gap: 8px;
@@ -5957,8 +6029,16 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
   color: #9a5314;
 }
 
-.purchase-recommendation--urgent .purchase-recommendation-title {
-  color: #b5453e;
+.purchase-recommendation.purchase-recommendation--urgent .purchase-recommendation-title {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border: 1px solid rgba(248, 113, 113, 0.28);
+  border-radius: 999px;
+  background: rgba(254, 226, 226, 0.92);
+  color: #b91c1c;
+  text-shadow: 0 0 10px rgba(220, 38, 38, 0.08);
 }
 
 .purchase-recommendation--urgent .purchase-recommendation-sub,
@@ -5983,6 +6063,7 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
 }
 
 .purchase-recommendation .purchase-cta-btn--card {
+  order: 3;
   width: 100%;
   min-height: 56px;
   margin-top: 2px;
@@ -6010,6 +6091,26 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
   animation: purchase-urgent-pulse 1.2s ease-in-out infinite;
 }
 
+.purchase-recommendation.purchase-recommendation--urgent .purchase-cta-btn--urgent {
+  border-color: #991b1b;
+  background: linear-gradient(180deg, #dc2626 0%, #991b1b 100%);
+  box-shadow:
+    0 20px 36px rgba(153, 27, 27, 0.34),
+    0 0 0 1px rgba(153, 27, 27, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  animation:
+    purchase-urgent-pulse 1.6s ease-in-out infinite,
+    purchase-cta-urgent-glow 2.2s ease-in-out infinite;
+}
+
+.product-row.card-danger .purchase-cta-btn--danger-emphasis {
+  transform: scale(1.02);
+  box-shadow:
+    0 20px 36px rgba(153, 27, 27, 0.34),
+    0 0 0 6px rgba(239, 68, 68, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
 @media (hover: hover) {
   .purchase-cta-btn:hover {
     transform: translateY(-1px) scale(1.02);
@@ -6023,9 +6124,18 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
   .purchase-cta-btn--urgent:hover {
     box-shadow: 0 18px 32px rgba(209, 90, 63, 0.34);
   }
+
+  .purchase-recommendation.purchase-recommendation--urgent .purchase-cta-btn--urgent:hover {
+    transform: translateY(-1px) scale(1.05);
+    background: linear-gradient(180deg, #ef4444 0%, #b91c1c 100%);
+    box-shadow:
+      0 24px 40px rgba(153, 27, 27, 0.4),
+      0 0 0 8px rgba(239, 68, 68, 0.12);
+  }
 }
 
 .purchase-options {
+  order: 6;
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
@@ -6375,7 +6485,7 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
 
 .product-progress-block .progress-track {
   grid-column: 1 / -1;
-  height: 8px;
+  height: 13px;
 }
 
 .product-progress-label {
@@ -6396,28 +6506,16 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
   transition: color 220ms ease;
 }
 
-.product-row .progress-track {
-  border-color: rgba(194, 154, 166, 0.26);
-  background: linear-gradient(180deg, rgba(250, 247, 248, 0.98) 0%, rgba(248, 235, 239, 0.94) 100%);
-  box-shadow: inset 0 1px 2px rgba(115, 86, 95, 0.08);
-}
-
-.product-row .progress-track--safe {
-  border-color: rgba(40, 137, 82, 0.34);
-  background: linear-gradient(180deg, rgba(232, 247, 237, 0.98) 0%, rgba(216, 242, 225, 0.94) 100%);
-}
-
-.product-row .progress-track--warning {
-  border-color: rgba(219, 123, 23, 0.36);
-  background: linear-gradient(180deg, rgba(255, 245, 224, 0.98) 0%, rgba(255, 235, 196, 0.94) 100%);
-}
-
-.product-row .progress-track--danger {
-  border-color: rgba(188, 40, 56, 0.42);
-  background: linear-gradient(180deg, rgba(255, 233, 236, 0.98) 0%, rgba(255, 215, 221, 0.95) 100%);
+.product-row .progress-track,
+.product-row .progress-track--safe,
+.product-row .progress-track--warning,
+.product-row .progress-track--danger,
+.product-row .progress-track--routine-updated {
+  border-color: #d7e0ea;
+  background-color: #f1f5f9;
   box-shadow:
-    inset 0 1px 2px rgba(142, 27, 47, 0.12),
-    0 0 0 1px rgba(188, 40, 56, 0.06);
+    inset 0 1px 2px rgba(148, 163, 184, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.28);
 }
 
 .product-row .progress-fill {
@@ -6426,29 +6524,44 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
 
 .product-row .progress-fill--safe,
 .product-row .progress-fill.good {
-  background: linear-gradient(180deg, #39b86d 0%, #1e8b51 100%);
+  background-color: #22c55e;
+}
+
+.product-row .progress-fill--safe-strong {
+  background-color: #16a34a;
 }
 
 .product-row .progress-fill--warning,
 .product-row .progress-fill.warning {
-  background: linear-gradient(180deg, #f6b227 0%, #d97706 100%);
+  background-color: #f59e0b;
 }
 
 .product-row .progress-fill--danger,
 .product-row .progress-fill.danger {
-  background: linear-gradient(180deg, #ef5350 0%, #c62839 100%);
+  background-color: #dc2626;
+  box-shadow:
+    inset 0 -1px 0 rgba(255, 255, 255, 0.18),
+    0 0 8px rgba(220, 38, 38, 0.45);
+  animation: progress-danger-pulse 1.5s ease-in-out infinite;
+  opacity: 1;
+}
+
+.product-progress-percent.progress-text--safe-strong {
+  color: #16a34a;
 }
 
 .product-progress-percent.progress-text--safe {
-  color: #1f8a4f;
+  color: #15803d;
 }
 
 .product-progress-percent.progress-text--warning {
-  color: #b05b05;
+  color: #b45309;
 }
 
 .product-progress-percent.progress-text--danger {
-  color: #bc2838;
+  color: #dc2626;
+  font-size: 20px;
+  font-weight: 700;
 }
 
 .product-result-summary {
@@ -6561,6 +6674,10 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
   background-color: #2f9f62;
 }
 
+.progress-fill--safe-strong {
+  background-color: #16a34a;
+}
+
 .progress-fill--warning,
 .progress-fill.warning {
   background-color: #d97706;
@@ -6573,6 +6690,10 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
 
 .progress-text--safe {
   color: #247a4e;
+}
+
+.progress-text--safe-strong {
+  color: #16a34a;
 }
 
 .progress-text--warning {
@@ -6591,6 +6712,24 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
 
 .progress-track--routine-updated .progress-fill {
   animation: progress-fill-routine-drop 760ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.product-row .progress-track--routine-updated .progress-fill--danger,
+.product-row .progress-track--routine-updated .progress-fill.danger {
+  animation:
+    progress-fill-routine-drop 760ms cubic-bezier(0.22, 1, 0.36, 1),
+    progress-danger-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes progress-danger-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.8;
+  }
 }
 
 @keyframes progress-fill-routine-drop {
@@ -6821,6 +6960,17 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
 
   100% {
     box-shadow: 0 0 0 0 rgba(209, 90, 63, 0), 0 12px 22px rgba(209, 90, 63, 0.24);
+  }
+}
+
+@keyframes purchase-cta-urgent-glow {
+  0%,
+  100% {
+    filter: saturate(1) brightness(1);
+  }
+
+  50% {
+    filter: saturate(1.08) brightness(1.04);
   }
 }
 

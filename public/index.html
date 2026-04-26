@@ -277,6 +277,7 @@
       </section>
 
       <section id="product-section" aria-label="루틴별 제품 현황">
+        <div id="routineProductsSection" aria-hidden="true"></div>
         <div class="product-list-heading">
           <div>
             <h3>루틴별 제품 현황</h3>
@@ -298,10 +299,12 @@
             </div>
           </div>
         </div>
+        <div id="sampleProductsSection" aria-hidden="true"></div>
         <div id="activeProductList" class="product-card-list" aria-live="polite"></div>
       </section>
 
       <section id="productAddSection" aria-label="제품 추가">
+        <div id="productFormSection" aria-hidden="true"></div>
         <div id="productCreationCard" class="card product-add-card">
           <div class="product-section-heading">
             <div>
@@ -450,7 +453,7 @@
                 <p id="quickAddStatus" class="product-form-status" aria-live="polite">쉼표, 줄바꿈, /, ;로 제품명을 나눠 입력하세요</p>
               </div>
             </div>
-            <div id="productInputContainer" class="inline-form" role="tabpanel" aria-labelledby="singleAddModeBtn">
+            <form id="productInputContainer" class="inline-form" role="tabpanel" aria-labelledby="singleAddModeBtn" novalidate>
               <div id="productNameGroup" class="usage-config-group product-form-field product-form-field--name">
                 <label for="productName" class="field-label">제품명</label>
                 <input
@@ -599,10 +602,10 @@
                 <p id="usageRecommendation" class="hint usage-recommendation"></p>
               </div>
               <div class="product-form-submit">
-                <button id="addProductBtn" class="product-submit-btn" type="button" disabled>제품 추가</button>
+                <button id="addProductBtn" class="product-submit-btn" type="submit" disabled>제품 추가</button>
                 <p id="productFormStatus" class="product-form-status" aria-live="polite">제품명만 입력하면 바로 추가할 수 있어요</p>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       </section>
@@ -759,6 +762,7 @@
   </main>
 
   <main id="historyScreen" class="hidden">
+    <div id="historySection" aria-hidden="true"></div>
     <div class="card history-card">
       <div class="history-header">
         <div>
