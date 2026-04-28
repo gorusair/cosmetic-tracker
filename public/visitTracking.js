@@ -39,6 +39,11 @@ function getTodayString() {
 
 function shouldSkipVisitLogging() {
   try {
+    if (window.isDemo === true) {
+      console.log("skip firestore (demo mode)");
+      return true;
+    }
+
     if (isDemoMode()) {
       return true;
     }
@@ -57,6 +62,11 @@ function shouldSkipVisitLogging() {
 
 async function logVisitOnce() {
   if (shouldSkipVisitLogging()) {
+    return;
+  }
+
+  if (!auth.currentUser) {
+    console.log("skip firestore (demo mode)");
     return;
   }
 

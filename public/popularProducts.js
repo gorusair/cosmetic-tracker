@@ -21,6 +21,14 @@ function getCurrentUser() {
   return auth.currentUser || null;
 }
 
+function shouldSkipFirestoreForDemo() {
+  if (window.isDemo === true || !getCurrentUser()) {
+    console.log("skip firestore (demo mode)");
+    return true;
+  }
+  return false;
+}
+
 function getPreferredScrollBehavior() {
   return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches
     ? "auto"
@@ -83,6 +91,8 @@ function getPreferredBrand(brandCounts) {
 }
 
 async function fetchPurchaseClicks() {
+  if (shouldSkipFirestoreForDemo()) return [];
+
   const clicksQuery = query(
     collection(db, "purchaseClicks"),
     orderBy("timestamp", "desc"),

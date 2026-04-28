@@ -53,6 +53,26 @@ body.landing-mode {
   padding: 0;
 }
 
+.demo-mode-banner {
+  width: min(100%, var(--service-container-width));
+  margin: 0 auto 12px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: #fff4c2;
+  border: 1px solid #f1c85a;
+  color: #6f4a00;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+  box-shadow: 0 10px 24px rgba(130, 91, 0, 0.12);
+}
+
+body.landing-mode .demo-mode-banner {
+  width: 100%;
+  margin: 0;
+  border-radius: 0;
+}
+
 .demo-toolbar {
   position: fixed;
   top: max(12px, env(safe-area-inset-top, 0px));
@@ -2025,6 +2045,39 @@ body.landing-mode .empty-landing {
 
 .landing-primary-cta:active:not(:disabled) {
   transform: scale(0.99);
+}
+
+.demo-login-prompt {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid #f0c56a;
+  border-radius: 16px;
+  background: #fff7d6;
+  box-shadow: 0 10px 22px rgba(124, 86, 0, 0.1);
+}
+
+.demo-login-prompt p {
+  margin: 0;
+  color: #704a00;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.demo-login-prompt-value {
+  color: #c04a18;
+  font-size: 14px;
+  font-weight: 950;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.demo-login-prompt-actions {
+  display: grid;
+  gap: 8px;
 }
 
 @keyframes landing-cta-pulse {

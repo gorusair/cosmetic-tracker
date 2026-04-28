@@ -10,6 +10,8 @@
     let currentUid = null;
     let activeProducts = [];
     let sampleDisplayProducts = [];
+    let isDemo = true;
+    window.isDemo = isDemo;
     let lastProductFormStateLogSignature = "";
     let hasRegisteredProducts = false;
     let isLoadingProductCollection = true;
@@ -98,6 +100,8 @@
     const DEMO_MODE_RESET_TOAST_DURATION_MS = 1500;
     const SAMPLE_BANNER_MESSAGE = "지금 보이는 제품은 체험용 샘플입니다. 내 제품으로 바꿔서 시작해보세요.";
     const queryParams = new URLSearchParams(window.location.search);
+    console.log("isDemo:", isDemo);
+    console.log(isDemo ? "mode: DEMO" : "mode: REAL");
     const DEMO_MODE_ENABLED = queryParams.get("demo") === "1";
     const DEMO_MODE_DATA = normalizeDemoDataValue(queryParams.get("demoData"));
     const RESET_MODE_ENABLED = queryParams.get("reset") === "1" || queryParams.get("resetOnboarding") === "1";
@@ -336,6 +340,14 @@
 
     function isDemoMode() {
       return DEMO_MODE_ENABLED;
+    }
+
+    function shouldSkipFirestoreForDemo() {
+      if (isDemo === true) {
+        console.log("skip firestore (demo mode)");
+        return true;
+      }
+      return false;
     }
 
     function getDemoStorage(type = "local") {
@@ -976,6 +988,24 @@
       toolbarEl.setAttribute("aria-hidden", shouldShow ? "false" : "true");
     }
 
+    function updateDemoModeBanner() {
+      const bannerEl = document.getElementById("demoModeBanner");
+      if (!bannerEl) return;
+
+      const shouldShow = isDemo === true;
+      bannerEl.classList.toggle("hidden", !shouldShow);
+      bannerEl.setAttribute("aria-hidden", shouldShow ? "false" : "true");
+    }
+
+    function updateDemoLoginPrompt() {
+      const promptEl = document.getElementById("demoLoginPrompt");
+      if (!promptEl) return;
+
+      const shouldShow = isDemo === true;
+      promptEl.classList.toggle("hidden", !shouldShow);
+      promptEl.setAttribute("aria-hidden", shouldShow ? "false" : "true");
+    }
+
     async function userHasDebugAdminAccess(user) {
       if (!user) return false;
 
@@ -1021,6 +1051,7 @@
     }
 
     async function deleteFirestoreQueryDocs(query) {
+      if (shouldSkipFirestoreForDemo()) return 0;
       if (!db || !query) return 0;
 
       let deletedCount = 0;
@@ -1040,6 +1071,7 @@
     }
 
     async function clearFirestoreUserData(uid) {
+      if (shouldSkipFirestoreForDemo()) return;
       if (!db || !uid) return;
 
       const userRef = db.collection("users").doc(uid);
@@ -1172,6 +1204,7 @@
     }
 
     async function logVisitOnce(user = currentUser) {
+      if (shouldSkipFirestoreForDemo()) return;
       if (!db || shouldSkipVisitLogging()) return;
 
       const loggedDate = getVisitLoggedDate();
@@ -1361,6 +1394,8 @@
       }
 
       updateDemoToolbar();
+      updateDemoModeBanner();
+      updateDemoLoginPrompt();
       updatePrimaryExperienceStage();
       const shouldWaitForFirestoreProducts = Boolean(currentUser)
         && isLoadingProductCollection
@@ -1693,7 +1728,25 @@
       focusElementWithoutScroll(landingInputEl);
     }
 
+    function guideToLandingLoginActions() {
+      const actionsEl = document.getElementById("landingStartActions");
+      const googleLoginBtn = document.getElementById("googleLoginBtn");
+      const anonLoginBtn = document.getElementById("anonLoginBtn");
+      const focusTarget = googleLoginBtn && !googleLoginBtn.classList.contains("hidden")
+        ? googleLoginBtn
+        : anonLoginBtn;
+
+      actionsEl?.scrollIntoView({ behavior: getPreferredScrollBehavior(), block: "center" });
+      if (focusTarget) {
+        requestAnimationFrame(() => {
+          focusElementWithoutScroll(focusTarget);
+        });
+      }
+    }
+
     function transferLandingQuickProductNameToProductForm() {
+      if (isDemo === true) return false;
+
       const landingProductName = getLandingQuickProductName();
       const nameInputEl = document.getElementById("productName");
       if (!landingProductName || !nameInputEl || nameInputEl.value.trim()) return false;
@@ -2363,6 +2416,12 @@
     async function handleLandingInputCta() {
       if (!getLandingQuickProductName()) {
         focusLandingQuickProductNameInput();
+        return;
+      }
+
+      if (isDemo === true) {
+        promptLoginForDemoProductSave();
+        guideToLandingLoginActions();
         return;
       }
 
@@ -3416,6 +3475,17 @@
       const listEl = document.getElementById("historyList");
       if (!listEl) return;
 
+      if (shouldSkipFirestoreForDemo()) {
+        historyUsageEvents = [];
+        listEl.innerHTML = `
+          <div class="history-empty-state">
+            <div class="history-empty-title">데모 모드에서는 기록이 고정됩니다</div>
+            <div class="history-empty-desc">상단 데모 리셋으로 언제든 초기 상태로 돌아갈 수 있어요</div>
+          </div>
+        `;
+        return;
+      }
+
       if (isDemoMode()) {
         historyUsageEvents = [];
         listEl.innerHTML = `
@@ -3492,6 +3562,10 @@
     }
 
     async function calculateUsageStreak() {
+      if (shouldSkipFirestoreForDemo()) {
+        return { type: "logged_out", streak: 0 };
+      }
+
       if (!currentUser || !currentUid) {
         return { type: "logged_out", streak: 0 };
       }
@@ -5664,6 +5738,7 @@
     }
 
     async function trackPurchaseClick(productId, productName, platform, product = null) {
+      if (shouldSkipFirestoreForDemo()) return;
       const safeProductId = String(productId || "").trim();
       const safeProductName = String(productName || "").trim();
       const safePlatform = getPurchasePlatformOption(platform)?.id || "";
@@ -6709,6 +6784,7 @@
     }
 
     async function maybeShowFirstProductSuccessFlow(productId) {
+      if (shouldSkipFirestoreForDemo()) return;
       if (!currentUser || !currentUid || !productId) return;
       const requestedUid = currentUid;
       if (hasSeenFirstProductSuccess(requestedUid)) return;
@@ -6931,6 +7007,13 @@
       el.classList.remove("hidden");
     }
 
+    function promptLoginForDemoProductSave() {
+      showAuthMessage("저장하려면 로그인이 필요해요");
+      showToast("저장하려면 로그인이 필요해요", "로그인하면 입력한 제품을 내 루틴에 바로 추가할 수 있어요.", 2600, {
+        placement: "top"
+      });
+    }
+
     function shouldShowDataSafetyNotice(user) {
       if (isDemoMode()) return false;
       return !user || user.isAnonymous;
@@ -6953,9 +7036,9 @@
     }
 
     function ensureAuthenticatedForWrite() {
-      if (isDemoMode()) {
-        showAuthMessage("데모 모드에서는 변경되지 않습니다.");
-        showToast("데모 모드", "화면이 고정되어 있어 저장되지 않습니다.", DEMO_MODE_RESET_TOAST_DURATION_MS);
+      if (isDemo === true || isDemoMode()) {
+        if (isDemo === true) shouldSkipFirestoreForDemo();
+        promptLoginForDemoProductSave();
         return false;
       }
       if (syncCurrentAuthStateFromFirebase()) {
@@ -6967,9 +7050,9 @@
     }
 
     async function ensureAuthenticatedForProductCreation() {
-      if (isDemoMode()) {
-        showAuthMessage("데모 모드에서는 변경되지 않습니다.");
-        showToast("데모 모드", "화면이 고정되어 있어 저장되지 않습니다.", DEMO_MODE_RESET_TOAST_DURATION_MS);
+      if (isDemo === true || isDemoMode()) {
+        if (isDemo === true) shouldSkipFirestoreForDemo();
+        promptLoginForDemoProductSave();
         return false;
       }
       if (syncCurrentAuthStateFromFirebase()) {
@@ -7510,6 +7593,11 @@
 
     async function addProduct() {
       console.log("[addProduct] start");
+      if (isDemo === true) {
+        promptLoginForDemoProductSave();
+        return;
+      }
+
       const canWrite = await ensureAuthenticatedForProductCreation();
       if (!canWrite || !currentUid) return;
       if (pendingProductCreation) return;
@@ -7627,6 +7715,11 @@
     }
 
     async function addQuickProducts() {
+      if (isDemo === true) {
+        promptLoginForDemoProductSave();
+        return;
+      }
+
       const canWrite = await ensureAuthenticatedForProductCreation();
       if (!canWrite || !currentUid) return;
       if (pendingProductCreation) return;
@@ -8597,9 +8690,11 @@
       const listEl = document.getElementById("activeProductList");
       listEl.innerHTML = "";
 
-      if (isDemoMode()) {
-        activeProducts = getDemoModeProducts();
-        sampleDisplayProducts = [];
+      if (isDemo === true) {
+        shouldSkipFirestoreForDemo();
+        console.log("load: DEMO DATA");
+        activeProducts = [];
+        sampleDisplayProducts = insertSampleProducts([]);
         hasRegisteredProducts = getActualActiveProductCount(activeProducts) > 0;
         isLoadingProductCollection = false;
         openedPurchaseMenuProductId = null;
@@ -8609,19 +8704,14 @@
         return;
       }
 
+      console.log("load: REAL DATA");
+
       if (!currentUser) {
         const baseProducts = [];
         activeProducts = baseProducts;
         sampleDisplayProducts = [];
         hasRegisteredProducts = false;
         isLoadingProductCollection = false;
-        if (baseProducts.length === 0 && shouldInsertSampleData({
-          products: baseProducts,
-          hasRegisteredProducts: false
-        })) {
-          renderSampleProducts(baseProducts);
-          return;
-        }
         openedPurchaseMenuProductId = null;
         openedPurchaseMenuSection = "";
         pendingPurchaseMenuFocusTarget = null;
@@ -8656,18 +8746,12 @@
       }));
       activeProducts = fetchedActiveProducts;
       sampleDisplayProducts = [];
-      if (fetchedActiveProducts.length === 0 && shouldInsertSampleData({
-        products: fetchedActiveProducts,
-        hasRegisteredProducts
-      })) {
-        renderSampleProducts(fetchedActiveProducts);
-        return;
-      }
       syncEntryFlowWithProductState(activeProducts);
       renderActiveProductsList();
     }
 
     async function renderEventDetail(eventData) {
+      if (shouldSkipFirestoreForDemo()) return;
       const section = document.getElementById("eventDetailSection");
       const detail = document.getElementById("eventDetail");
 
@@ -8702,6 +8786,7 @@
     }
 
     async function createSkinEvent(type) {
+      if (shouldSkipFirestoreForDemo()) return;
       const canWrite = ensureAuthenticatedForWrite();
       if (!canWrite || !currentUid) return;
 
@@ -8750,6 +8835,22 @@
 
     async function renderRecentEvents() {
       const listEl = document.getElementById("recentEventList");
+
+      if (shouldSkipFirestoreForDemo()) {
+        isLoadingRecentUsageEvents = false;
+        recentUsageEvents = [];
+        if (listEl) {
+          listEl.innerHTML = "<p class='hint'>데모 모드에서는 기록 화면이 고정됩니다.</p>";
+        }
+        renderTodayRoutineProgress();
+        refreshRoutineCards();
+        renderProductDetailModal();
+        await renderUsageStreak();
+        if (activeScreen === "history") {
+          await renderUsageHistory();
+        }
+        return;
+      }
 
       if (isDemoMode()) {
         isLoadingRecentUsageEvents = false;
@@ -9134,6 +9235,13 @@
         });
         await handleGoogleStartFlow();
       });
+      document.getElementById("demoPromptGoogleLoginBtn")?.addEventListener("click", async () => {
+        recordFirebaseClickEvent("click_login", {
+          method: "google",
+          source: "demo_prompt"
+        });
+        await handleGoogleStartFlow();
+      });
       document.getElementById("navGoogleLoginBtn")?.addEventListener("click", async () => {
         recordFirebaseClickEvent("click_login", {
           method: "google",
@@ -9154,6 +9262,13 @@
         recordFirebaseClickEvent("click_login", {
           method: "anonymous",
           source: "landing"
+        });
+        await handleLandingPrimaryCta();
+      });
+      document.getElementById("demoPromptAnonLoginBtn")?.addEventListener("click", async () => {
+        recordFirebaseClickEvent("click_login", {
+          method: "anonymous",
+          source: "demo_prompt"
         });
         await handleLandingPrimaryCta();
       });
@@ -9279,17 +9394,31 @@
         removeQuickAddPreviewItem(removeBtn.getAttribute("data-quick-add-remove-index"));
       });
       document.getElementById("quickAddProductsBtn")?.addEventListener("click", async () => {
+        if (isDemo === true) {
+          promptLoginForDemoProductSave();
+          return;
+        }
+
         recordFirebaseClickEvent("click_add_product", {
           mode: "quick"
         });
         await addQuickProducts();
       });
-      document.getElementById("addProductBtn")?.addEventListener("click", () => {
+      document.getElementById("addProductBtn")?.addEventListener("click", (event) => {
         console.log("[product-form] button clicked");
+        if (isDemo === true) {
+          event.preventDefault();
+          promptLoginForDemoProductSave();
+        }
       });
       document.getElementById("productInputContainer")?.addEventListener("submit", async (event) => {
         event.preventDefault();
         console.log("[product-form] submit fired");
+        if (isDemo === true) {
+          promptLoginForDemoProductSave();
+          return;
+        }
+
         recordFirebaseClickEvent("click_add_product", {
           mode: "single"
         });
@@ -9512,6 +9641,8 @@
         ? "home"
         : normalizeActiveScreen(readStorageItem(ACTIVE_VIEW_STORAGE_KEY) || "home");
       bindEvents();
+      updateDemoModeBanner();
+      updateDemoLoginPrompt();
       void updateDebugResetButtonVisibility(null);
       updateHistoryFilterTabsUI();
       renderTodayRoutineProgress();
@@ -9531,6 +9662,11 @@
       auth.onAuthStateChanged(async (user) => {
         currentUser = user;
         currentUid = user ? user.uid : null;
+        isDemo = !user;
+        window.isDemo = isDemo;
+        console.log(isDemo ? "mode: DEMO" : "mode: REAL");
+        updateDemoModeBanner();
+        updateDemoLoginPrompt();
         void logVisitOnce(user);
         activeProducts = [];
         sampleDisplayProducts = [];
