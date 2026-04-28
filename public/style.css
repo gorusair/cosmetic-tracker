@@ -250,6 +250,11 @@ body.service-mode .nav {
   }
 }
 
+.nav-title {
+  display: grid;
+  gap: 4px;
+}
+
 .nav h1 {
   margin: 0;
   padding: 0;
@@ -260,6 +265,14 @@ body.service-mode .nav {
   font-size: 16px;
   font-weight: 800;
   letter-spacing: 0;
+}
+
+.nav-title p {
+  margin: 0 0 12px;
+  color: #666;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.35;
 }
 
 h3 {
@@ -2047,6 +2060,14 @@ body.landing-mode .empty-landing {
   transform: scale(0.99);
 }
 
+.landing-input-flow {
+  margin: 0 0 8px;
+  color: #888;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 .demo-login-prompt {
   display: grid;
   gap: 10px;
@@ -2459,12 +2480,10 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
   gap: 14px;
   margin-bottom: 14px;
   padding: 12px 14px;
-  border: 1px solid #e8ddf7;
+  border: 1px solid #f0c56a;
   border-radius: 18px;
-  background:
-    radial-gradient(140px 70px at 0% 0%, rgba(255, 244, 235, 0.78) 0%, rgba(255, 244, 235, 0) 72%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.94) 0%, #f8f3ff 100%);
-  box-shadow: 0 8px 20px rgba(117, 87, 138, 0.05);
+  background: #fff7d6;
+  box-shadow: 0 10px 22px rgba(124, 86, 0, 0.1);
 }
 
 .data-safety-notice-copy {
@@ -2478,16 +2497,16 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
 
 .data-safety-notice-title {
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 900;
   line-height: 1.45;
-  color: #554178;
+  color: #704a00;
 }
 
 .data-safety-notice-desc {
   margin-top: 3px;
   font-size: 12px;
   line-height: 1.5;
-  color: #7a6c91;
+  color: #80622a;
 }
 
 .data-safety-notice-cta {
@@ -2495,7 +2514,7 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
   padding: 0;
   border-radius: 999px;
   background: transparent;
-  color: #6c4fe0;
+  color: #9a4f00;
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0;

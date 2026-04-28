@@ -55,8 +55,8 @@ function getPopularProductsEmptyMarkup() {
   return `
     <div class="engagement-empty-card popular-products-empty-card">
       <div class="engagement-empty-icon popular-products-empty-icon" aria-hidden="true">📦</div>
-      <div class="engagement-empty-title popular-products-empty-title">아직 추천 데이터가 부족해요</div>
-      <div class="engagement-empty-desc popular-products-empty-desc">첫 제품을 등록하고 루틴을 기록해보세요</div>
+      <div class="engagement-empty-title popular-products-empty-title">아직 데이터가 없어요</div>
+      <div class="engagement-empty-desc popular-products-empty-desc">첫 번째 기록을 남겨보세요</div>
       <button
         type="button"
         class="engagement-empty-cta popular-products-empty-cta"

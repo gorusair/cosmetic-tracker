@@ -10,6 +10,8 @@
     let currentUid = null;
     let activeProducts = [];
     let sampleDisplayProducts = [];
+    let disableSample = false;
+    let isAuthReady = false;
     let isDemo = true;
     window.isDemo = isDemo;
     let lastProductFormStateLogSignature = "";
@@ -32,6 +34,7 @@
     const SOON_DEPLETION_DAYS_THRESHOLD = 30;
     const PURCHASE_WARNING_DAYS_THRESHOLD = 20;
     const PURCHASE_URGENT_DAYS_THRESHOLD = 7;
+    const LOW_STOCK_CTA_MESSAGE = "이거 끊기면 루틴 깨져요. 지금 미리 사두는 게 편해요";
     const FIREBASE_CLICK_EVENT_NAMES = new Set([
       "click_add_product",
       "click_use_product",
@@ -841,12 +844,12 @@
 
     function getDisplayProducts(products = null) {
       if (Array.isArray(products)) return products;
-      if (isDemoMode()) return activeProducts;
       if (activeProducts.length > 0) return activeProducts;
-      return Array.isArray(sampleDisplayProducts) ? sampleDisplayProducts : [];
+      return !disableSample && isDemo === true && !currentUser && Array.isArray(sampleDisplayProducts) ? sampleDisplayProducts : [];
     }
 
     function getSampleDisplayProducts(products = sampleDisplayProducts) {
+      if (disableSample || currentUser || isDemo !== true) return [];
       return Array.isArray(products)
         ? products.filter((product) => isSampleProduct(product))
         : [];
@@ -999,11 +1002,17 @@
 
     function updateDemoLoginPrompt() {
       const promptEl = document.getElementById("demoLoginPrompt");
-      if (!promptEl) return;
+      const landingActionsEl = document.getElementById("landingStartActions");
 
       const shouldShow = isDemo === true;
-      promptEl.classList.toggle("hidden", !shouldShow);
-      promptEl.setAttribute("aria-hidden", shouldShow ? "false" : "true");
+      if (promptEl) {
+        promptEl.classList.toggle("hidden", !shouldShow);
+        promptEl.setAttribute("aria-hidden", shouldShow ? "false" : "true");
+      }
+      if (landingActionsEl) {
+        landingActionsEl.classList.toggle("hidden", shouldShow);
+        landingActionsEl.setAttribute("aria-hidden", shouldShow ? "true" : "false");
+      }
     }
 
     async function userHasDebugAdminAccess(user) {
@@ -2479,7 +2488,6 @@
       }
 
       removeStorageItem(SAMPLE_DISMISSED_STORAGE_KEY);
-      sampleDisplayProducts = insertSampleProducts(activeProducts);
       renderActiveProductsList();
       renderTopCta();
 
@@ -2543,9 +2551,15 @@
     }
 
     function shouldInsertSampleData(options = {}) {
-      if (isDemoMode()) return false;
-      if (options.hasRegisteredProducts) return false;
-      return getActualActiveProductCount(options.products) === 0;
+      return shouldCreateSampleProducts();
+    }
+
+    function shouldCreateSampleProducts() {
+      return !disableSample && isDemo === true && !currentUser;
+    }
+
+    function getSampleProducts() {
+      return [];
     }
 
     // 샘플 제품도 기존 제품 카드 렌더링 함수를 그대로 재사용할 수 있게 정규화합니다.
@@ -2572,13 +2586,12 @@
     }
 
     function renderSampleProducts(products = []) {
-      if (hasRealProducts()) {
+      if (!shouldCreateSampleProducts()) {
         sampleDisplayProducts = [];
         renderActiveProductsList();
         return sampleDisplayProducts;
       }
 
-      sampleDisplayProducts = insertSampleProducts(Array.isArray(products) ? products : []);
       openedPurchaseMenuProductId = null;
       openedPurchaseMenuSection = "";
       pendingPurchaseMenuFocusTarget = null;
@@ -3766,9 +3779,9 @@
         return {
           status: "urgent",
           statusLabel: "긴급",
-          message: "지금 구매 안하면 끊길 수 있어요",
+          message: LOW_STOCK_CTA_MESSAGE,
           buttonLabel: "지금 구매하기",
-          supportNote: "👉 미리 구매해두면 안심이에요",
+          supportNote: "",
           showButton: true
         };
       }
@@ -3776,10 +3789,10 @@
         return {
           status: "warning",
           statusLabel: "준비",
-          message: "미리 준비하세요",
+          message: "",
           buttonLabel: "구매 고려하기",
           supportNote: "",
-          showButton: true
+          showButton: false
         };
       }
       return {
@@ -3867,7 +3880,7 @@
 
     function getSoonDepletionAction(daysLeft) {
       const status = getSoonDepletionVisualState(daysLeft);
-      if (status === "safe") {
+      if (status !== "urgent") {
         return {
           label: "",
           className: "purchase-cta-btn soon-depletion-purchase-cta",
@@ -3875,7 +3888,7 @@
         };
       }
       return {
-        label: status === "urgent" ? "지금 구매하기" : "미리 준비하기",
+        label: "지금 구매하기",
         className: `purchase-cta-btn soon-depletion-purchase-cta purchase-cta-btn--${status}`,
         showButton: true
       };
@@ -3884,36 +3897,23 @@
     function getSoonDepletionUrgencyMessage(daysLeft) {
       const displayDaysLeft = getDisplayDaysLeft(daysLeft);
       if (displayDaysLeft <= 0) {
-        return "오늘 안 사면 바로 비어요";
+        return LOW_STOCK_CTA_MESSAGE;
       }
       if (displayDaysLeft <= 1) {
-        return "내일 루틴 전에 준비 필요";
+        return LOW_STOCK_CTA_MESSAGE;
       }
       if (displayDaysLeft <= PURCHASE_URGENT_DAYS_THRESHOLD) {
-        return "지금 안 사면 루틴이 끊길 수 있어요";
+        return LOW_STOCK_CTA_MESSAGE;
       }
-      if (displayDaysLeft <= SOON_DEPLETION_DAYS_THRESHOLD) {
-        return "미리 안 사두면 타이밍을 놓치기 쉬워요";
-      }
-      return "소진 시점을 계속 자동 추적 중입니다";
+      return "";
     }
 
     function getSoonDepletionComfortMessage(daysLeft) {
-      const displayDaysLeft = getDisplayDaysLeft(daysLeft);
-      if (displayDaysLeft <= PURCHASE_URGENT_DAYS_THRESHOLD) {
-        return "지금 사두면 루틴을 끊지 않아도 됩니다";
-      }
-      if (displayDaysLeft <= SOON_DEPLETION_DAYS_THRESHOLD) {
-        return "미리 확인하면 중복 구매를 줄일 수 있어요";
-      }
-      return "기록이 쌓일수록 계산이 더 정확해집니다";
+      return "";
     }
 
     function getSoonDepletionActionSupportText(daysLeft) {
-      if (getSoonDepletionVisualState(daysLeft) === "safe") {
-        return "";
-      }
-      return "구매처를 바로 선택해서 이어서 살 수 있어요";
+      return "";
     }
 
     function buildSoonDepletionDisplayItem(source, options = {}) {
@@ -4051,7 +4051,7 @@
           status: "danger",
           label: "3일 내 소진",
           title: "긴급",
-          message: "⚠️ 3일 뒤 소진 예정 지금 구매하지 않으면 사용이 끊길 수 있어요",
+          message: LOW_STOCK_CTA_MESSAGE,
           badgeClassName: "low-stock-badge--critical"
         };
       }
@@ -4061,7 +4061,7 @@
           status: "warning",
           label: "곧 다 써요",
           title: "임박",
-          message: "곧 떨어질 수 있어요 ⚠️ 미리 준비해두세요",
+          message: "",
           badgeClassName: ""
         };
       }
@@ -4090,7 +4090,7 @@
         return {
           status: "danger",
           title: "소진 임박",
-          message: "이거 끊기면 루틴 깨져요, 지금 미리 사두는 게 편해요",
+          message: LOW_STOCK_CTA_MESSAGE,
           buttonLabel: "지금 사기",
           showButton: true
         };
@@ -4100,9 +4100,9 @@
         return {
           status: "warning",
           title: "미리 준비 추천",
-          message: "곧 떨어질 수 있어요, 미리 확인해보세요",
+          message: "",
           buttonLabel: "최저가 확인",
-          showButton: true
+          showButton: false
         };
       }
 
@@ -4110,18 +4110,18 @@
         return {
           status: "safe",
           title: "가격 체크",
-          message: "아직 여유 있어요, 필요할 때 확인해보세요",
+          message: "",
           buttonLabel: "제품 보기",
-          showButton: true
+          showButton: false
         };
       }
 
       return {
         status: "safe",
         title: "가격 체크",
-        message: "아직 여유 있어요, 필요할 때 확인해보세요",
+        message: "",
         buttonLabel: "제품 보기",
-        showButton: true
+        showButton: false
       };
     }
 
@@ -4542,7 +4542,7 @@
       const remainingStockState = getRemainingStockState(percent);
       const purchaseCtaState = getProductPurchaseCtaState(percent, daysLeft);
       const showPurchaseRecommendation = purchaseCtaState.showButton;
-      const showPurchaseHint = remainingStockState.status !== "safe";
+      const showPurchaseHint = remainingStockState.status === "danger";
       const isPurchaseMenuOpen = openedPurchaseMenuProductId === product.id
         && openedPurchaseMenuSection === "activeProductList";
       const todayUsageState = buildTodayRoutineUsageState(recentUsageEvents);
@@ -4865,6 +4865,7 @@
 
     function getHomeDisplayProducts(products = getDisplayProducts()) {
       if (isDemoMode()) return products;
+      if (disableSample || currentUser || isDemo !== true) return products.filter((product) => !isSampleProduct(product));
 
       const realProducts = products.filter((product) => !isSampleProduct(product));
       if (realProducts.length > 0) {
@@ -8594,6 +8595,14 @@
       const listEl = document.getElementById("activeProductList");
       if (!listEl) return;
 
+      if (disableSample) {
+        sampleDisplayProducts = [];
+      }
+
+      if (currentUser || isDemo !== true) {
+        sampleDisplayProducts = [];
+      }
+
       const realProductsVisible = hasRealProducts();
       const displayProducts = realProductsVisible ? getHomeDisplayProducts(activeProducts) : [];
       const sampleProducts = realProductsVisible ? [] : getSampleDisplayProducts();
@@ -8687,14 +8696,19 @@
     }
 
     async function renderActiveProducts() {
+      if (!isAuthReady) return;
+
       const listEl = document.getElementById("activeProductList");
       listEl.innerHTML = "";
+
+      if (disableSample) {
+        sampleDisplayProducts = [];
+      }
 
       if (isDemo === true) {
         shouldSkipFirestoreForDemo();
         console.log("load: DEMO DATA");
         activeProducts = [];
-        sampleDisplayProducts = insertSampleProducts([]);
         hasRegisteredProducts = getActualActiveProductCount(activeProducts) > 0;
         isLoadingProductCollection = false;
         openedPurchaseMenuProductId = null;
@@ -8834,6 +8848,8 @@
     }
 
     async function renderRecentEvents() {
+      if (!isAuthReady) return;
+
       const listEl = document.getElementById("recentEventList");
 
       if (shouldSkipFirestoreForDemo()) {
@@ -9629,6 +9645,25 @@
     window.scrollToProductCreationForm = scrollToProductCreationForm;
     window.scrollToProductFormSection = scrollToProductFormSection;
 
+    async function renderApp() {
+      if (!isAuthReady) return;
+
+      updateAuthUI(currentUser);
+      updateEmptyStateOnboarding();
+      updateProductFormVisibility();
+      syncProductCreationFormInteractivity();
+      renderTodayRoutineProgress();
+      document.getElementById("eventDetailSection")?.classList.add("hidden");
+
+      if (!currentUser) {
+        hasEnteredPrimaryFlow = false;
+      }
+
+      await renderActiveProducts();
+      await renderRecentEvents();
+      setHomeVisible(!isOnboardingOpen);
+    }
+
     async function initialize() {
       if (!window.firebaseServices && !isDemoMode()) {
         setTimeout(initialize, 100);
@@ -9645,31 +9680,41 @@
       updateDemoLoginPrompt();
       void updateDebugResetButtonVisibility(null);
       updateHistoryFilterTabsUI();
-      renderTodayRoutineProgress();
-      updateEmptyStateOnboarding();
-      updateProductFormVisibility();
       updateRoutineFrequencyFieldVisibility();
       updateCategoryUsageRecommendation();
       setHomeVisible(false);
 
       if (isDemoMode()) {
-        updateAuthUI(null);
+        isAuthReady = true;
         await resetDemoModeExperience({ showToastMessage: false });
-        setHomeVisible(!isOnboardingOpen);
         return;
       }
 
       auth.onAuthStateChanged(async (user) => {
         currentUser = user;
+        if (user) {
+          disableSample = true;
+          sampleDisplayProducts = [];
+          clearSampleProductsSection();
+          renderSampleBanner();
+          const productListEl = document.getElementById("activeProductList");
+          if (productListEl) productListEl.innerHTML = "";
+        } else {
+          disableSample = false;
+        }
         currentUid = user ? user.uid : null;
         isDemo = !user;
         window.isDemo = isDemo;
+        isAuthReady = true;
+        sampleDisplayProducts = [];
         console.log(isDemo ? "mode: DEMO" : "mode: REAL");
         updateDemoModeBanner();
         updateDemoLoginPrompt();
         void logVisitOnce(user);
         activeProducts = [];
-        sampleDisplayProducts = [];
+        if (user) {
+          sampleDisplayProducts = [];
+        }
         hasRegisteredProducts = false;
         isLoadingProductCollection = Boolean(user);
         isLoadingRecentUsageEvents = Boolean(user);
@@ -9696,23 +9741,7 @@
         setProductStartType("new");
         setProductAddMode("single");
         resetQuickAddCommonSettings();
-        updateAuthUI(user);
-        updateEmptyStateOnboarding();
-        updateProductFormVisibility();
-        syncProductCreationFormInteractivity();
-        renderTodayRoutineProgress();
-        document.getElementById("eventDetailSection").classList.add("hidden");
-        if (!user) {
-          hasEnteredPrimaryFlow = false;
-          await renderActiveProducts();
-          await renderRecentEvents();
-          setHomeVisible(!isOnboardingOpen);
-          return;
-        }
-
-        await renderActiveProducts();
-        await renderRecentEvents();
-        setHomeVisible(!isOnboardingOpen);
+        await renderApp();
       });
     }
 
