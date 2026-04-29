@@ -6314,7 +6314,7 @@
         subtext: "D-day",
         helperText: "제품명만 입력하면 바로 기록할 수 있어요",
         buttonLabel: "지금 기록하기",
-        note: "지금 기록 안 하면 계산이 어긋나요",
+        note: "매일 기록하면 더 정확하게 알려드려요",
         mode: "add-product",
         disabled: false
       };
@@ -6374,7 +6374,7 @@
         subtext: getProductDdayLabel(daysLeft),
         helperText: "지금 기록해야 소진일이 정확해져요",
         buttonLabel: "지금 기록하기",
-        note: "지금 기록 안 하면 계산이 어긋나요",
+        note: "매일 기록하면 더 정확하게 알려드려요",
         mode: "routine",
         productId: priorityProduct.id,
         routineSession

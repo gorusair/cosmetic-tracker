@@ -756,7 +756,7 @@ textarea {
   resize: vertical;
   border-color: #e2d7ec;
   background: #fff;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.5;
 }
 
@@ -1260,7 +1260,7 @@ body.service-mode .routine-progress {
   background: transparent;
   color: #4f3d73;
   font: inherit;
-  font-size: 12px;
+  font-size: 16px;
   font-weight: 900;
 }
 
@@ -2503,10 +2503,7 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
 }
 
 .data-safety-notice-desc {
-  margin-top: 3px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #80622a;
+  display: none;
 }
 
 .data-safety-notice-cta {
@@ -5255,7 +5252,7 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
   min-height: 42px;
   margin: 0;
   border-color: #ded2ef;
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .product-setup-input-with-unit {
@@ -5379,7 +5376,7 @@ body.service-mode .primary-app-sections--home-mode #soonDepletionSection {
   min-height: 42px;
   margin: 0;
   border-color: #ded2ef;
-  font-size: 13px;
+  font-size: 16px;
 }
 
 .product-identity-editor-actions {
@@ -8163,4 +8160,15 @@ button,
 .purchase-recommendation--urgent .purchase-recommendation-sub,
 .purchase-recommendation--urgent .purchase-recommendation-note {
   color: #b45a6a;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+input,
+textarea,
+select,
+button {
+  font-size: 16px !important;
 }

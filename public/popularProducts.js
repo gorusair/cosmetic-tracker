@@ -146,15 +146,15 @@ function renderPopularProducts(products = []) {
   renderedPopularProducts = products;
   const hasProducts = products.length > 0;
 
-  sectionEl.classList.remove("hidden");
-  sectionEl.setAttribute("aria-hidden", "false");
+  sectionEl.classList.toggle("hidden", !hasProducts);
+  sectionEl.setAttribute("aria-hidden", hasProducts ? "false" : "true");
   listEl.classList.toggle("hidden", !hasProducts);
-  emptyEl.classList.toggle("hidden", hasProducts);
-  emptyEl.setAttribute("aria-hidden", hasProducts ? "true" : "false");
+  emptyEl.classList.add("hidden");
+  emptyEl.setAttribute("aria-hidden", "true");
 
   if (!hasProducts) {
     listEl.innerHTML = "";
-    emptyEl.innerHTML = getPopularProductsEmptyMarkup();
+    emptyEl.innerHTML = "";
     return;
   }
 
