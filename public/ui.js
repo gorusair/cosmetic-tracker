@@ -2507,6 +2507,86 @@
       }, 0);
     }
 
+    function hasCalculatedDepletionDate(product) {
+      if (!product || isSampleProduct(product)) return false;
+      const remainingMl = calculateRemainingMl(product);
+      const perUseMl = Number(product?.perUseMl);
+      const dailyFrequency = getRoutineDailyFrequency(product?.routine, product?.usageFrequencyPerDay);
+      const dailyUsageMl = perUseMl * dailyFrequency;
+      const daysLeft = calculateDaysLeft(product);
+      return Number.isFinite(remainingMl)
+        && Number.isFinite(perUseMl)
+        && Number.isFinite(dailyUsageMl)
+        && dailyUsageMl > 0
+        && Number.isFinite(daysLeft)
+        && daysLeft >= 0;
+    }
+
+    function hasVisiblePurchaseCtaProduct(product) {
+      if (!product || isSampleProduct(product)) return false;
+      if (!hasCalculatedDepletionDate(product)) return false;
+      return getPurchaseUrgencyState(calculateDaysLeft(product)).showButton === true;
+    }
+
+    function calculateRoutineScore(products = activeProducts, events = recentUsageEvents) {
+      const realProducts = Array.isArray(products)
+        ? products.filter((product) => !isSampleProduct(product))
+        : [];
+      const hasRegisteredProduct = hasRegisteredProducts || realProducts.length > 0;
+      const hasTodayUsage = getTodayUsageCount(events) > 0;
+      const hasRoutineInfo = realProducts.some((product) => {
+        return product && product.needsSetup !== true && Boolean(product.routine);
+      });
+      const hasDepletionDate = realProducts.some(hasCalculatedDepletionDate);
+      const hasPurchaseCta = realProducts.some(hasVisiblePurchaseCtaProduct);
+
+      return {
+        score:
+          (hasRegisteredProduct ? 20 : 0)
+          + (hasTodayUsage ? 30 : 0)
+          + (hasRoutineInfo ? 20 : 0)
+          + (hasDepletionDate ? 20 : 0)
+          + (hasPurchaseCta ? 10 : 0),
+        hasRegisteredProduct,
+        hasTodayUsage,
+        hasRoutineInfo,
+        hasDepletionDate,
+        hasPurchaseCta
+      };
+    }
+
+    function renderRoutineScoreCard() {
+      const cardEl = document.getElementById("routineScoreCard");
+      const valueEl = document.getElementById("routineScoreValue");
+      const messageEl = document.getElementById("routineScoreMessage");
+      const badgeEl = document.getElementById("routineScoreBadge");
+      const statusEl = document.getElementById("routineScoreStatus");
+      if (!cardEl || !valueEl || !messageEl) return;
+
+      const scoreState = calculateRoutineScore();
+      valueEl.textContent = String(scoreState.score);
+      messageEl.textContent = "소진일과 구매 타이밍을 계속 추적 중이에요";
+      if (statusEl) {
+        statusEl.textContent = "오늘 루틴 관리 상태가 좋아요";
+      }
+      if (badgeEl) {
+        const shouldShowBadge = scoreState.score >= 100;
+        badgeEl.classList.toggle("hidden", !shouldShowBadge);
+        badgeEl.setAttribute("aria-hidden", shouldShowBadge ? "false" : "true");
+      }
+      cardEl.classList.remove("hidden");
+      cardEl.hidden = false;
+      cardEl.removeAttribute("hidden");
+      cardEl.setAttribute("aria-hidden", "false");
+
+      if (!scoreState.hasRegisteredProduct) {
+        cardEl.classList.add("routine-score-card--empty");
+        return;
+      }
+
+      cardEl.classList.remove("routine-score-card--empty");
+    }
+
     function guideToTodayUsageAction() {
       const productSectionEl = document.querySelector("#product-section");
       if (productSectionEl) {
@@ -6109,6 +6189,7 @@
       }, uid);
 
       renderTodayRoutineProgress();
+      renderRoutineScoreCard();
       void renderUsageStreak();
 
       return {
@@ -8271,6 +8352,7 @@
       recentUsageEvents = [optimisticEvent, ...recentUsageEvents].slice(0, RECENT_LOG_FETCH_LIMIT);
       renderRecentEventsList(recentUsageEvents);
       renderTodayRoutineProgress();
+      renderRoutineScoreCard();
       renderProductDetailModal();
     }
 
@@ -8626,6 +8708,7 @@
       renderSampleBanner();
       renderSoonDepletionSummary();
       renderTodayRoutineProgress();
+      renderRoutineScoreCard();
       updateProductStateView({
         hasRealProducts: realProductsVisible,
         hasSampleProducts: !realProductsVisible && sampleProducts.length > 0
@@ -8859,6 +8942,7 @@
           listEl.innerHTML = "<p class='hint'>데모 모드에서는 기록 화면이 고정됩니다.</p>";
         }
         renderTodayRoutineProgress();
+        renderRoutineScoreCard();
         refreshRoutineCards();
         renderProductDetailModal();
         await renderUsageStreak();
@@ -8875,6 +8959,7 @@
           listEl.innerHTML = "<p class='hint'>데모 모드에서는 기록 화면이 고정됩니다.</p>";
         }
         renderTodayRoutineProgress();
+        renderRoutineScoreCard();
         refreshRoutineCards();
         renderProductDetailModal();
         await renderUsageStreak();
@@ -8889,6 +8974,7 @@
         recentUsageEvents = [];
         listEl.innerHTML = "<p class='hint'>로그인하면 최근 이벤트를 볼 수 있습니다.</p>";
         renderTodayRoutineProgress();
+        renderRoutineScoreCard();
         refreshRoutineCards();
         renderProductDetailModal();
         await renderUsageStreak();
@@ -8928,6 +9014,7 @@
 
         isLoadingRecentUsageEvents = false;
         renderTodayRoutineProgress();
+        renderRoutineScoreCard();
         refreshRoutineCards();
         renderProductDetailModal();
         await renderUsageStreak();
@@ -9653,6 +9740,7 @@
       updateProductFormVisibility();
       syncProductCreationFormInteractivity();
       renderTodayRoutineProgress();
+      renderRoutineScoreCard();
       document.getElementById("eventDetailSection")?.classList.add("hidden");
 
       if (!currentUser) {
