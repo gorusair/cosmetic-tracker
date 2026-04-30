@@ -4554,6 +4554,33 @@
             ${getPurchaseQuickLinksMarkup(product.id)}
             ${getPurchaseOptionsMarkup(product.id, { dataRole: "purchaseOptions" })}
           </div>
+          <form class="depletion-notify-form" data-product-id="${product.id}" data-role="depletionNotifyForm" novalidate>
+            <button
+              class="depletion-notify-toggle"
+              type="button"
+              data-product-id="${product.id}"
+              aria-expanded="false"
+              aria-controls="depletionNotifyPanel-${product.id}"
+            >
+              소진 알림 받기
+            </button>
+            <div id="depletionNotifyPanel-${product.id}" class="depletion-notify-panel hidden" data-role="depletionNotifyPanel" aria-hidden="true">
+              <label class="depletion-notify-label" for="depletionNotifyEmail-${product.id}">소진 전에 이메일로 알려드릴까요?</label>
+              <div class="depletion-notify-controls">
+                <input
+                  id="depletionNotifyEmail-${product.id}"
+                  class="depletion-notify-input"
+                  type="email"
+                  inputmode="email"
+                  autocomplete="email"
+                  placeholder="이메일 입력"
+                  aria-describedby="depletionNotifyStatus-${product.id}"
+                />
+                <button class="depletion-notify-btn" type="submit">알림 받기</button>
+              </div>
+            </div>
+            <p id="depletionNotifyStatus-${product.id}" class="depletion-notify-status" data-role="depletionNotifyStatus" aria-live="polite"></p>
+          </form>
           <div class="product-today-status" data-role="todayRoutineStatus"></div>
           <div class="product-setup-prompt hidden" data-role="setupPrompt">
             <div class="product-setup-prompt-copy">
@@ -4662,6 +4689,8 @@
       const purchaseSubtitleEl = row.querySelector('[data-role="purchaseSubtitle"]');
       const purchaseSupportNoteEl = row.querySelector('[data-role="purchaseSupportNote"]');
       const purchaseOptionsEl = row.querySelector('[data-role="purchaseOptions"]');
+      const depletionNotifyFormEl = row.querySelector('[data-role="depletionNotifyForm"]');
+      const depletionNotifyToggleEl = row.querySelector(".depletion-notify-toggle");
       const creationGuideEl = row.querySelector('[data-role="creationGuide"]');
       const routineFeedbackEl = row.querySelector('[data-role="routineFeedback"]');
       const setupPromptEl = row.querySelector('[data-role="setupPrompt"]');
@@ -4856,6 +4885,13 @@
         purchaseCtaBtn.classList.toggle("purchase-cta-btn--warning", showPurchaseRecommendation && isWarningPurchaseState);
         purchaseCtaBtn.classList.toggle("purchase-cta-btn--urgent", showPurchaseRecommendation && isUrgentPurchaseState);
         purchaseCtaBtn.setAttribute("aria-expanded", showPurchaseRecommendation && isPurchaseMenuOpen ? "true" : "false");
+      }
+      if (depletionNotifyFormEl) {
+        depletionNotifyFormEl.classList.toggle("depletion-notify-form--priority", showPurchaseRecommendation);
+        depletionNotifyFormEl.classList.toggle("depletion-notify-form--urgent", isUrgentPurchaseState);
+      }
+      if (depletionNotifyToggleEl) {
+        depletionNotifyToggleEl.disabled = !currentUser || isSample;
       }
  
       if (creationGuideEl) {
@@ -6021,6 +6057,74 @@
 
     async function handlePurchaseOptionSelection(productId, marketplace) {
       await handlePurchasePlatformClick(productId, marketplace, { closeModal: true });
+    }
+
+    function setDepletionNotifyStatus(formEl, message = "", tone = "") {
+      const statusEl = formEl?.querySelector('[data-role="depletionNotifyStatus"]');
+      if (!statusEl) return;
+      statusEl.textContent = message;
+      statusEl.classList.toggle("depletion-notify-status--success", tone === "success");
+      statusEl.classList.toggle("depletion-notify-status--error", tone === "error");
+    }
+
+    function getDepletionNotifyEmail(formEl) {
+      const inputEl = formEl?.querySelector(".depletion-notify-input");
+      return String(inputEl?.value || "").trim();
+    }
+
+    function isValidEmailAddress(email) {
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
+    }
+
+    async function handleDepletionNotifySubmit(event) {
+      event.preventDefault();
+      const formEl = event.target;
+      if (!(formEl instanceof HTMLFormElement)) return;
+      if (isDemoMode()) {
+        showDemoModeLockedToast("데모 모드에서는 알림 설정이 저장되지 않습니다.");
+        return;
+      }
+
+      const productId = formEl.getAttribute("data-product-id") || "";
+      const product = activeProducts.find((item) => item.id === productId);
+      const email = getDepletionNotifyEmail(formEl);
+      if (!productId || !product || isSampleProduct(product)) return;
+
+      if (!isValidEmailAddress(email)) {
+        setDepletionNotifyStatus(formEl, "이메일을 확인해주세요", "error");
+        return;
+      }
+
+      if (!ensureAuthenticatedForWrite() || !currentUid) {
+        setDepletionNotifyStatus(formEl, "로그인 후 알림을 저장할 수 있어요", "error");
+        return;
+      }
+
+      const submitBtn = formEl.querySelector(".depletion-notify-btn");
+      if (submitBtn instanceof HTMLButtonElement) {
+        submitBtn.disabled = true;
+      }
+      setDepletionNotifyStatus(formEl, "알림 설정을 저장하고 있어요");
+
+      try {
+        await getUserRef("depletionNotifications").add({
+          notifyEnabled: true,
+          notifyEmail: email,
+          notifyBeforeDays: 3,
+          userId: currentUid,
+          productId,
+          productName: getPurchaseProductName(product),
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        setDepletionNotifyStatus(formEl, "소진 전에 이메일로 알려드릴게요", "success");
+      } catch (error) {
+        console.error("Unable to save depletion notification setting.", error);
+        setDepletionNotifyStatus(formEl, "알림 설정을 저장하지 못했어요", "error");
+      } finally {
+        if (submitBtn instanceof HTMLButtonElement) {
+          submitBtn.disabled = false;
+        }
+      }
     }
 
     function focusPurchaseMenuIfNeeded() {
@@ -9157,6 +9261,20 @@
         return;
       }
 
+      const depletionNotifyToggleBtn = target.closest(".depletion-notify-toggle");
+      if (depletionNotifyToggleBtn) {
+        const formEl = depletionNotifyToggleBtn.closest('[data-role="depletionNotifyForm"]');
+        const panelEl = formEl?.querySelector('[data-role="depletionNotifyPanel"]');
+        const shouldExpand = panelEl?.classList.contains("hidden");
+        panelEl?.classList.toggle("hidden", !shouldExpand);
+        panelEl?.setAttribute("aria-hidden", shouldExpand ? "false" : "true");
+        depletionNotifyToggleBtn.setAttribute("aria-expanded", shouldExpand ? "true" : "false");
+        if (shouldExpand) {
+          formEl?.querySelector(".depletion-notify-input")?.focus();
+        }
+        return;
+      }
+
       const purchaseCtaBtn = target.closest(".purchase-cta-btn");
       if (purchaseCtaBtn) {
         const id = purchaseCtaBtn.getAttribute("data-product-id");
@@ -9421,6 +9539,7 @@
       document.getElementById("activeProductList").addEventListener("click", handleActiveProductListClick);
       document.getElementById("activeProductList").addEventListener("input", handleActiveProductListInput);
       document.getElementById("activeProductList").addEventListener("change", handleActiveProductListChange);
+      document.getElementById("activeProductList").addEventListener("submit", handleDepletionNotifySubmit);
       document.getElementById("sampleProductsSection")?.addEventListener("click", handleActiveProductListClick);
       document.getElementById("sampleProductsSection")?.addEventListener("input", handleActiveProductListInput);
       document.getElementById("sampleProductsSection")?.addEventListener("change", handleActiveProductListChange);

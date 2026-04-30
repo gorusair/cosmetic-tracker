@@ -17,6 +17,10 @@ service cloud.firestore {
       allow read, write: if isOwner(userId);
     }
 
+    match /users/{userId}/depletionNotifications/{docId} {
+      allow read, write: if isOwner(userId);
+    }
+
     match /users/{userId}/usageLogs/{docId} {
       allow read, write: if isOwner(userId);
     }
