@@ -282,8 +282,8 @@
               <p id="topCtaNote" class="cta-note" aria-live="polite">매일 기록하면 더 정확하게 알려드려요</p>
             </div>
           </div>
-          <div class="today-representative-block" aria-label="가장 급한 제품 1개">
-            <div class="today-representative-label">대표 제품 1개</div>
+          <div class="today-representative-block" aria-label="곧 소진 대표 제품">
+            <div class="today-representative-label">곧 소진 대표 제품</div>
             <div id="soonDepletionList"></div>
           </div>
           <div id="homeStatusSummary" class="home-status-summary today-action-hub-summary" aria-label="오늘 할 일 요약">
@@ -303,6 +303,34 @@
           </div>
         </div>
         <p id="soonDepletionNote" class="soon-depletion-note hidden">보이는 D-day는 실제 제품 등록 후 자동으로 내 데이터로 바뀝니다</p>
+      </section>
+
+      <section id="monthlyUsageSummaryCard" class="monthly-usage-summary-card" aria-label="이번 달 사용 요약">
+        <div class="monthly-usage-summary-header">
+          <div class="monthly-usage-summary-title-row">
+            <h3>이번 달 사용 요약</h3>
+            <span class="monthly-usage-summary-badge">MONTHLY</span>
+          </div>
+          <p id="monthlyUsageSummaryMessage">이번 달 얼마나 썼는지 한눈에 볼 수 있어요</p>
+        </div>
+        <div id="monthlyUsageSummaryGrid" class="monthly-usage-summary-grid" aria-live="polite">
+          <article class="monthly-usage-summary-item">
+            <span class="monthly-usage-summary-label">총 사용량</span>
+            <strong id="monthlyUsageTotal" class="monthly-usage-summary-value">-</strong>
+          </article>
+          <article class="monthly-usage-summary-item">
+            <span class="monthly-usage-summary-label">기록한 날짜</span>
+            <strong id="monthlyUsageDays" class="monthly-usage-summary-value">-</strong>
+          </article>
+          <article class="monthly-usage-summary-item">
+            <span class="monthly-usage-summary-label">곧 소진</span>
+            <strong id="monthlyUsageSoonDepletion" class="monthly-usage-summary-value">-</strong>
+          </article>
+          <article class="monthly-usage-summary-item">
+            <span class="monthly-usage-summary-label">가장 많이 사용한 제품</span>
+            <strong id="monthlyUsageTopProduct" class="monthly-usage-summary-value monthly-usage-summary-value--product">-</strong>
+          </article>
+        </div>
       </section>
 
       <section id="routineScoreCard" class="routine-score-card" aria-label="루틴 관리 점수">

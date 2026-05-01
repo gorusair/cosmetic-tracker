@@ -254,6 +254,7 @@
     let isOnboardingOpen = false;
     let lastFocusedElement = null;
     let recentUsageEvents = [];
+    let monthlyUsageEvents = [];
     let pendingRoutineType = null;
     let hasManualPerUseMlInput = false;
     let openedPurchaseMenuProductId = null;
@@ -2565,9 +2566,9 @@
 
       const scoreState = calculateRoutineScore();
       valueEl.textContent = String(scoreState.score);
-      messageEl.textContent = "소진일과 구매 타이밍을 계속 추적 중이에요";
+      messageEl.textContent = "루틴 상태를 간단히 보여드려요";
       if (statusEl) {
-        statusEl.textContent = "오늘 루틴 관리 상태가 좋아요";
+        statusEl.textContent = "오늘 관리 상태";
       }
       if (badgeEl) {
         const shouldShowBadge = scoreState.score >= 100;
@@ -2585,6 +2586,135 @@
       }
 
       cardEl.classList.remove("routine-score-card--empty");
+    }
+
+    function getCurrentMonthStartDate(referenceDate = new Date()) {
+      return new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1);
+    }
+
+    function isDateInCurrentMonth(date, referenceDate = new Date()) {
+      if (!date) return false;
+      return date.getFullYear() === referenceDate.getFullYear()
+        && date.getMonth() === referenceDate.getMonth();
+    }
+
+    function getUsageLogItemFromDoc(doc) {
+      const data = doc.data() || {};
+      return {
+        id: doc.id,
+        productId: data.productId || "",
+        productName: data.productName || "",
+        action: data.action || "USED",
+        type: data.type || "",
+        routine: data.routine || "",
+        routineSession: data.routineSession || "",
+        deltaPct: Number.isFinite(Number(data.deltaPct)) ? Number(data.deltaPct) : 0,
+        remainingAfter: normalizePercentInt(
+          data.remainingAfter ?? data.remainAfter,
+          DEFAULT_REMAINING_PERCENT
+        ),
+        createdAt: data.createdAt || null,
+        pending: false
+      };
+    }
+
+    function resolveUsageEventAmountMl(eventItem, productById, productByName) {
+      const product = productById.get(eventItem?.productId)
+        || productByName.get(String(eventItem?.productName || "").trim());
+      if (!product) return 0;
+
+      const perUseMl = Number(product.perUseMl);
+      if (Number.isFinite(perUseMl) && perUseMl > 0) {
+        return normalizeMlAmount(perUseMl);
+      }
+
+      const totalMl = Number(product.totalMl);
+      const deltaPct = Number(eventItem?.deltaPct);
+      if (Number.isFinite(totalMl) && totalMl > 0 && Number.isFinite(deltaPct) && deltaPct > 0) {
+        return normalizeMlAmount((totalMl * deltaPct) / 100);
+      }
+
+      return 0;
+    }
+
+    function calculateMonthlyUsageSummary(products = activeProducts, events = monthlyUsageEvents) {
+      const realProducts = Array.isArray(products)
+        ? products.filter((product) => product && !isSampleProduct(product))
+        : [];
+      const productById = new Map();
+      const productByName = new Map();
+      realProducts.forEach((product) => {
+        if (product.id) productById.set(product.id, product);
+        const name = String(product.name || "").trim();
+        if (name) productByName.set(name, product);
+      });
+
+      const referenceDate = new Date();
+      const currentMonthEvents = (Array.isArray(events) ? events : [])
+        .filter((eventItem) => isDateInCurrentMonth(toDateSafe(eventItem?.createdAt), referenceDate));
+      const recordedDateKeys = new Set();
+      const usageByProduct = new Map();
+      let totalAmountMl = 0;
+
+      currentMonthEvents.forEach((eventItem) => {
+        const eventDate = toDateSafe(eventItem?.createdAt);
+        if (eventDate) recordedDateKeys.add(formatDateYmd(eventDate));
+
+        const amountMl = resolveUsageEventAmountMl(eventItem, productById, productByName);
+        if (!Number.isFinite(amountMl) || amountMl <= 0) return;
+
+        totalAmountMl += amountMl;
+        const fallbackName = String(eventItem?.productName || "").trim();
+        const product = productById.get(eventItem?.productId) || productByName.get(fallbackName);
+        const productName = String(product?.name || fallbackName || "이름 없는 제품").trim();
+        const productKey = eventItem?.productId || productName;
+        const current = usageByProduct.get(productKey) || { name: productName, amountMl: 0 };
+        current.amountMl += amountMl;
+        usageByProduct.set(productKey, current);
+      });
+
+      const soonDepletionCount = realProducts.reduce((count, product) => {
+        if (!hasCalculatedDepletionDate(product)) return count;
+        const displayDaysLeft = getDisplayDaysLeft(calculateDaysLeft(product));
+        return displayDaysLeft <= SOON_DEPLETION_DAYS_THRESHOLD ? count + 1 : count;
+      }, 0);
+
+      const topProduct = Array.from(usageByProduct.values())
+        .sort((a, b) => b.amountMl - a.amountMl)[0] || null;
+
+      return {
+        hasData: totalAmountMl > 0 && currentMonthEvents.length > 0,
+        totalAmountMl: normalizeMlAmount(totalAmountMl),
+        recordedDays: recordedDateKeys.size,
+        soonDepletionCount,
+        topProductName: topProduct?.name || ""
+      };
+    }
+
+    function renderMonthlyUsageSummaryCard() {
+      const cardEl = document.getElementById("monthlyUsageSummaryCard");
+      const messageEl = document.getElementById("monthlyUsageSummaryMessage");
+      const totalEl = document.getElementById("monthlyUsageTotal");
+      const daysEl = document.getElementById("monthlyUsageDays");
+      const soonEl = document.getElementById("monthlyUsageSoonDepletion");
+      const topProductEl = document.getElementById("monthlyUsageTopProduct");
+      if (!cardEl || !messageEl || !totalEl || !daysEl || !soonEl || !topProductEl) return;
+
+      const summary = calculateMonthlyUsageSummary();
+      cardEl.classList.toggle("monthly-usage-summary-card--empty", !summary.hasData);
+      messageEl.textContent = summary.hasData
+        ? "이번 달 얼마나 썼는지 한눈에 볼 수 있어요"
+        : "제품을 기록하면 이번 달 사용량을 보여드려요";
+      totalEl.innerHTML = summary.hasData
+        ? `${formatMlValue(summary.totalAmountMl)}<span class="monthly-usage-summary-unit">ml</span>`
+        : "-";
+      daysEl.innerHTML = summary.hasData
+        ? `${summary.recordedDays}<span class="monthly-usage-summary-unit">일</span>`
+        : "-";
+      soonEl.innerHTML = summary.hasData
+        ? `${summary.soonDepletionCount}<span class="monthly-usage-summary-unit">개</span>`
+        : "-";
+      topProductEl.textContent = summary.hasData && summary.topProductName ? summary.topProductName : "-";
     }
 
     function guideToTodayUsageAction() {
@@ -8454,9 +8584,13 @@
         pending: true
       };
       recentUsageEvents = [optimisticEvent, ...recentUsageEvents].slice(0, RECENT_LOG_FETCH_LIMIT);
+      if (isDateInCurrentMonth(toDateSafe(optimisticEvent.createdAt))) {
+        monthlyUsageEvents = [optimisticEvent, ...monthlyUsageEvents].slice(0, 500);
+      }
       renderRecentEventsList(recentUsageEvents);
       renderTodayRoutineProgress();
       renderRoutineScoreCard();
+      renderMonthlyUsageSummaryCard();
       renderProductDetailModal();
     }
 
@@ -8813,6 +8947,7 @@
       renderSoonDepletionSummary();
       renderTodayRoutineProgress();
       renderRoutineScoreCard();
+      renderMonthlyUsageSummaryCard();
       updateProductStateView({
         hasRealProducts: realProductsVisible,
         hasSampleProducts: !realProductsVisible && sampleProducts.length > 0
@@ -9042,11 +9177,13 @@
       if (shouldSkipFirestoreForDemo()) {
         isLoadingRecentUsageEvents = false;
         recentUsageEvents = [];
+        monthlyUsageEvents = [];
         if (listEl) {
           listEl.innerHTML = "<p class='hint'>데모 모드에서는 기록 화면이 고정됩니다.</p>";
         }
         renderTodayRoutineProgress();
         renderRoutineScoreCard();
+        renderMonthlyUsageSummaryCard();
         refreshRoutineCards();
         renderProductDetailModal();
         await renderUsageStreak();
@@ -9059,11 +9196,13 @@
       if (isDemoMode()) {
         isLoadingRecentUsageEvents = false;
         recentUsageEvents = [];
+        monthlyUsageEvents = [];
         if (listEl) {
           listEl.innerHTML = "<p class='hint'>데모 모드에서는 기록 화면이 고정됩니다.</p>";
         }
         renderTodayRoutineProgress();
         renderRoutineScoreCard();
+        renderMonthlyUsageSummaryCard();
         refreshRoutineCards();
         renderProductDetailModal();
         await renderUsageStreak();
@@ -9076,9 +9215,11 @@
       if (!currentUser) {
         isLoadingRecentUsageEvents = false;
         recentUsageEvents = [];
+        monthlyUsageEvents = [];
         listEl.innerHTML = "<p class='hint'>로그인하면 최근 이벤트를 볼 수 있습니다.</p>";
         renderTodayRoutineProgress();
         renderRoutineScoreCard();
+        renderMonthlyUsageSummaryCard();
         refreshRoutineCards();
         renderProductDetailModal();
         await renderUsageStreak();
@@ -9090,35 +9231,34 @@
 
       try {
         isLoadingRecentUsageEvents = true;
+        const monthStart = getCurrentMonthStartDate();
         const snap = await getUsageLogRef()
           .where("ownerId", "==", currentUser.uid)
           .orderBy("createdAt", "desc")
           .limit(RECENT_LOG_FETCH_LIMIT)
           .get();
 
-        recentUsageEvents = snap.docs.map((doc) => {
-          const data = doc.data() || {};
-          return {
-            id: doc.id,
-            productId: data.productId || "",
-            productName: data.productName || "",
-            action: data.action || "USED",
-            type: data.type || "",
-            routine: data.routine || "",
-            routineSession: data.routineSession || "",
-            deltaPct: Number.isFinite(Number(data.deltaPct)) ? Number(data.deltaPct) : 0,
-            remainingAfter: normalizePercentInt(
-              data.remainingAfter ?? data.remainAfter,
-              DEFAULT_REMAINING_PERCENT
-            ),
-            createdAt: data.createdAt || null,
-            pending: false
-          };
-        });
+        recentUsageEvents = snap.docs.map(getUsageLogItemFromDoc);
+
+        try {
+          const monthlySnap = await getUsageLogRef()
+            .where("ownerId", "==", currentUser.uid)
+            .where("createdAt", ">=", monthStart)
+            .orderBy("createdAt", "desc")
+            .limit(500)
+            .get();
+          monthlyUsageEvents = monthlySnap.docs.map(getUsageLogItemFromDoc);
+        } catch (summaryError) {
+          console.error(summaryError);
+          monthlyUsageEvents = recentUsageEvents.filter((eventItem) => {
+            return isDateInCurrentMonth(toDateSafe(eventItem?.createdAt));
+          });
+        }
 
         isLoadingRecentUsageEvents = false;
         renderTodayRoutineProgress();
         renderRoutineScoreCard();
+        renderMonthlyUsageSummaryCard();
         refreshRoutineCards();
         renderProductDetailModal();
         await renderUsageStreak();
