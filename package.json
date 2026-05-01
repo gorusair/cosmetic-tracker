@@ -1,7 +1,7 @@
 {
   "name": "cosmetic-app",
   "version": "1.0.0",
-  "description": "Cosmetic Tracker app using Firebase Hosting",
+  "description": "Skinin app using Firebase Hosting",
   "main": "index.js",
   "scripts": {
     "start": "firebase emulators:start --only hosting",
