@@ -199,11 +199,11 @@
             입력하고 시작하기
           </button>
           <div id="demoLoginPrompt" class="demo-login-prompt hidden" aria-hidden="true">
-            <strong class="demo-login-prompt-value">곧 떨어질 수 있어요</strong>
-            <p>로그인하면 이 제품을 내 루틴에 저장할 수 있어요</p>
+            <strong class="demo-login-prompt-value">먼저 체험해볼 수 있어요</strong>
+            <p>로그인하면 입력한 제품을 내 루틴에 저장할 수 있어요</p>
             <div class="demo-login-prompt-actions">
-              <button id="demoPromptGoogleLoginBtn" class="landing-start-btn landing-start-btn--google" type="button">Google 로그인</button>
               <button id="demoPromptAnonLoginBtn" class="landing-start-btn landing-start-btn--anon" type="button">익명으로 시작</button>
+              <button id="demoPromptGoogleLoginBtn" class="landing-start-btn landing-start-btn--google" type="button">기록 저장하려면 Google 로그인</button>
             </div>
           </div>
         </div>
@@ -242,8 +242,8 @@
         </ol>
 
         <div id="landingStartActions" class="landing-start-actions" aria-label="시작하기">
-          <button id="googleLoginBtn" class="landing-start-btn landing-start-btn--google" type="button">Google 로그인</button>
           <button id="anonLoginBtn" class="landing-start-btn landing-start-btn--anon" type="button">익명으로 시작</button>
+          <button id="googleLoginBtn" class="landing-start-btn landing-start-btn--google" type="button">기록 저장하려면 Google 로그인</button>
         </div>
 
         <div class="landing-secondary-actions">
@@ -265,7 +265,7 @@
         <div class="home-section-heading">
           <div>
             <div class="today-status-eyebrow">오늘 할 일</div>
-            <h3>오늘 해야 할 일</h3>
+            <h3>오늘 기록할 제품</h3>
           </div>
         </div>
         <div class="today-action-hub">
@@ -279,11 +279,12 @@
                 <button id="cta-btn" type="button" data-action="add-product">지금 기록하기</button>
                 <button id="topSecondaryActionBtn" class="top-secondary-action-btn" type="button" data-action="add-product">제품 추가</button>
               </div>
-              <p id="topCtaNote" class="cta-note" aria-live="polite">매일 기록하면 더 정확하게 알려드려요</p>
+              <p id="topCtaNote" class="cta-note" aria-live="polite">오늘 사용한 제품만 빠르게 기록하세요</p>
             </div>
           </div>
           <div class="today-representative-block" aria-label="곧 소진 대표 제품">
             <div class="today-representative-label">곧 소진 대표 제품</div>
+            <div class="today-representative-desc">가장 먼저 소진될 제품을 보여드려요</div>
             <div id="soonDepletionList"></div>
           </div>
           <div id="homeStatusSummary" class="home-status-summary today-action-hub-summary" aria-label="오늘 할 일 요약">
@@ -475,6 +476,12 @@
                     />
                     <span class="usage-input-unit">ml</span>
                   </div>
+                  <div class="ml-preset-chip-group" aria-label="총 용량 빠른 선택">
+                    <button class="ml-preset-chip" type="button" data-ml-preset-target="quickAddTotalMl" data-ml-preset-value="30">30ml</button>
+                    <button class="ml-preset-chip" type="button" data-ml-preset-target="quickAddTotalMl" data-ml-preset-value="50">50ml</button>
+                    <button class="ml-preset-chip" type="button" data-ml-preset-target="quickAddTotalMl" data-ml-preset-value="100">100ml</button>
+                    <button class="ml-preset-chip" type="button" data-ml-preset-target="quickAddTotalMl" data-ml-preset-value="150">150ml</button>
+                  </div>
                   <p id="quickAddTotalMlHelp" class="usage-input-help">비워두면 100ml로 등록돼요</p>
                   <p id="quickAddTotalMlError" class="usage-input-error hidden" aria-live="polite"></p>
                 </div>
@@ -508,6 +515,12 @@
                       aria-describedby="quickAddPerUseMlHelp quickAddPerUseMlError"
                     />
                     <span class="usage-input-unit">ml</span>
+                  </div>
+                  <div class="ml-preset-chip-group" aria-label="1회 사용량 빠른 선택">
+                    <button class="ml-preset-chip" type="button" data-ml-preset-target="quickAddPerUseMl" data-ml-preset-value="0.3">0.3ml</button>
+                    <button class="ml-preset-chip" type="button" data-ml-preset-target="quickAddPerUseMl" data-ml-preset-value="0.5">0.5ml</button>
+                    <button class="ml-preset-chip" type="button" data-ml-preset-target="quickAddPerUseMl" data-ml-preset-value="0.7">0.7ml</button>
+                    <button class="ml-preset-chip" type="button" data-ml-preset-target="quickAddPerUseMl" data-ml-preset-value="1">1ml</button>
                   </div>
                   <p id="quickAddPerUseMlHelp" class="usage-input-help">비워두면 1ml로 등록돼요</p>
                   <p id="quickAddPerUseMlError" class="usage-input-error hidden" aria-live="polite"></p>
@@ -607,6 +620,12 @@
                     />
                     <span class="usage-input-unit">ml</span>
                   </div>
+                  <div class="ml-preset-chip-group" aria-label="총 용량 빠른 선택">
+                    <button class="ml-preset-chip" type="button" data-ml-preset-target="productTotalMl" data-ml-preset-value="30">30ml</button>
+                    <button class="ml-preset-chip" type="button" data-ml-preset-target="productTotalMl" data-ml-preset-value="50">50ml</button>
+                    <button class="ml-preset-chip" type="button" data-ml-preset-target="productTotalMl" data-ml-preset-value="100">100ml</button>
+                    <button class="ml-preset-chip" type="button" data-ml-preset-target="productTotalMl" data-ml-preset-value="150">150ml</button>
+                  </div>
                   <p id="productTotalMlHelp" class="usage-input-help">비워두면 100ml로 시작해요</p>
                   <p id="productTotalMlError" class="usage-input-error hidden" aria-live="polite"></p>
                 </div>
@@ -640,6 +659,12 @@
                       aria-describedby="productPerUseMlHelp productPerUseMlError"
                     />
                     <span class="usage-input-unit">ml</span>
+                  </div>
+                  <div class="ml-preset-chip-group" aria-label="1회 사용량 빠른 선택">
+                    <button class="ml-preset-chip" type="button" data-ml-preset-target="productPerUseMl" data-ml-preset-value="0.3">0.3ml</button>
+                    <button class="ml-preset-chip" type="button" data-ml-preset-target="productPerUseMl" data-ml-preset-value="0.5">0.5ml</button>
+                    <button class="ml-preset-chip" type="button" data-ml-preset-target="productPerUseMl" data-ml-preset-value="0.7">0.7ml</button>
+                    <button class="ml-preset-chip" type="button" data-ml-preset-target="productPerUseMl" data-ml-preset-value="1">1ml</button>
                   </div>
                   <p id="productPerUseMlHelp" class="usage-input-help">비워두면 1ml로 기록돼요</p>
                   <p id="productPerUseMlError" class="usage-input-error hidden" aria-live="polite"></p>
@@ -859,6 +884,31 @@
           </button>
         </div>
       </div>
+      <section class="usage-calendar-section" aria-label="사용 캘린더">
+        <div class="usage-calendar-header">
+          <div>
+            <h4>사용 캘린더</h4>
+            <p id="usageCalendarEmptyMessage" class="usage-calendar-subtitle">제품을 기록하면 사용 캘린더가 채워져요</p>
+          </div>
+          <div class="usage-calendar-nav" aria-label="월 이동">
+            <button id="usageCalendarPrevBtn" class="usage-calendar-nav-btn" type="button" aria-label="이전 달">‹</button>
+            <strong id="usageCalendarMonthLabel" class="usage-calendar-month-label">-</strong>
+            <button id="usageCalendarNextBtn" class="usage-calendar-nav-btn" type="button" aria-label="다음 달">›</button>
+          </div>
+        </div>
+        <div id="usageCalendarSummary" class="usage-calendar-summary" aria-label="월간 사용 요약"></div>
+        <div class="usage-calendar-weekdays" aria-hidden="true">
+          <span>일</span>
+          <span>월</span>
+          <span>화</span>
+          <span>수</span>
+          <span>목</span>
+          <span>금</span>
+          <span>토</span>
+        </div>
+        <div id="usageCalendarGrid" class="usage-calendar-grid" aria-label="월간 사용 날짜"></div>
+        <div id="usageCalendarDayDetail" class="usage-calendar-day-detail" aria-live="polite"></div>
+      </section>
       <div id="historyList"></div>
     </div>
   </main>

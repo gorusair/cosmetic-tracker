@@ -277,6 +277,8 @@
     const productFormTouchedFields = new Set();
     let historyUsageEvents = [];
     let historyFilterMode = "all";
+    let usageCalendarVisibleMonth = getCurrentMonthStartDate();
+    let selectedUsageCalendarDateKey = formatDateYmd(new Date());
     let isProductDetailOpen = false;
     let openedProductDetailId = null;
     let lastProductDetailFocusedElement = null;
@@ -1558,6 +1560,7 @@
       if (quickProductNamesEl) quickProductNamesEl.value = "";
       clearProductMlValidationErrors();
       resetProductFormTouchedFields();
+      updateAllMlPresetSelections();
       setProductStartType("new");
       setProductAddMode("single");
       resetQuickAddCommonSettings();
@@ -1739,12 +1742,16 @@
     }
 
     function guideToLandingLoginActions() {
-      const actionsEl = document.getElementById("landingStartActions");
-      const googleLoginBtn = document.getElementById("googleLoginBtn");
+      const demoPromptEl = document.getElementById("demoLoginPrompt");
+      const demoAnonLoginBtn = document.getElementById("demoPromptAnonLoginBtn");
+      const actionsEl = demoPromptEl && !demoPromptEl.classList.contains("hidden")
+        ? demoPromptEl
+        : document.getElementById("landingStartActions");
       const anonLoginBtn = document.getElementById("anonLoginBtn");
-      const focusTarget = googleLoginBtn && !googleLoginBtn.classList.contains("hidden")
-        ? googleLoginBtn
-        : anonLoginBtn;
+      const googleLoginBtn = document.getElementById("googleLoginBtn");
+      const focusTarget = demoAnonLoginBtn && demoPromptEl && !demoPromptEl.classList.contains("hidden")
+        ? demoAnonLoginBtn
+        : (anonLoginBtn && !anonLoginBtn.classList.contains("hidden") ? anonLoginBtn : googleLoginBtn);
 
       actionsEl?.scrollIntoView({ behavior: getPreferredScrollBehavior(), block: "center" });
       if (focusTarget) {
@@ -1755,8 +1762,6 @@
     }
 
     function transferLandingQuickProductNameToProductForm() {
-      if (isDemo === true) return false;
-
       const landingProductName = getLandingQuickProductName();
       const nameInputEl = document.getElementById("productName");
       if (!landingProductName || !nameInputEl || nameInputEl.value.trim()) return false;
@@ -2069,6 +2074,7 @@
       if (quickAddTotalMlEl) quickAddTotalMlEl.value = "";
       if (quickAddCurrentMlEl) quickAddCurrentMlEl.value = "";
       if (quickAddPerUseMlEl) quickAddPerUseMlEl.value = "";
+      updateAllMlPresetSelections();
       setQuickAddStartType("new");
       clearQuickAddValidationErrors();
     }
@@ -2429,12 +2435,10 @@
         return;
       }
 
-      if (isDemo === true) {
-        promptLoginForDemoProductSave();
-        guideToLandingLoginActions();
-        return;
-      }
-
+      recordFirebaseClickEvent("click_login", {
+        method: "anonymous",
+        source: "landing_input"
+      });
       await handleLandingPrimaryCta();
     }
 
@@ -3634,6 +3638,8 @@
       const listEl = document.getElementById("historyList");
       if (!listEl) return;
 
+      renderUsageCalendar(events);
+
       const allEntries = buildUsageHistoryEntries(events);
       if (!allEntries.length) {
         listEl.innerHTML = `
@@ -3694,12 +3700,247 @@
       `).join("");
     }
 
+    function getUsageCalendarMonthLabel(monthDate) {
+      return `${monthDate.getFullYear()}년 ${monthDate.getMonth() + 1}월`;
+    }
+
+    function isSameMonth(date, monthDate) {
+      return Boolean(date && monthDate
+        && date.getFullYear() === monthDate.getFullYear()
+        && date.getMonth() === monthDate.getMonth());
+    }
+
+    function getUsageCalendarMonthEvents(events = [], monthDate = usageCalendarVisibleMonth) {
+      return (Array.isArray(events) ? events : [])
+        .filter((eventItem) => isSameMonth(toDateSafe(eventItem?.createdAt), monthDate));
+    }
+
+    function getUsageCalendarProductLookups() {
+      const productById = new Map();
+      const productByName = new Map();
+      activeProducts
+        .filter((product) => product && !isSampleProduct(product))
+        .forEach((product) => {
+          if (product.id) productById.set(product.id, product);
+          const productName = String(product.name || "").trim();
+          if (productName) productByName.set(productName, product);
+        });
+      return { productById, productByName };
+    }
+
+    function getUsageCalendarSummary(events = []) {
+      const { productById, productByName } = getUsageCalendarProductLookups();
+      const recordedDateKeys = new Set();
+      const usageByProduct = new Map();
+      let totalAmountMl = 0;
+
+      events.forEach((eventItem) => {
+        const eventDate = toDateSafe(eventItem?.createdAt);
+        if (eventDate) recordedDateKeys.add(formatDateYmd(eventDate));
+
+        const amountMl = resolveUsageEventAmountMl(eventItem, productById, productByName);
+        if (!Number.isFinite(amountMl) || amountMl <= 0) return;
+
+        totalAmountMl += amountMl;
+        const fallbackName = String(eventItem?.productName || "").trim();
+        const product = productById.get(eventItem?.productId) || productByName.get(fallbackName);
+        const productName = String(product?.name || fallbackName || "이름 없는 제품").trim();
+        const productKey = eventItem?.productId || productName;
+        const current = usageByProduct.get(productKey) || { name: productName, amountMl: 0 };
+        current.amountMl += amountMl;
+        usageByProduct.set(productKey, current);
+      });
+
+      const soonDepletionCount = activeProducts
+        .filter((product) => product && !isSampleProduct(product))
+        .reduce((count, product) => {
+          if (!hasCalculatedDepletionDate(product)) return count;
+          const displayDaysLeft = getDisplayDaysLeft(calculateDaysLeft(product));
+          return displayDaysLeft <= SOON_DEPLETION_DAYS_THRESHOLD ? count + 1 : count;
+        }, 0);
+      const topProduct = Array.from(usageByProduct.values())
+        .sort((a, b) => b.amountMl - a.amountMl)[0] || null;
+
+      return {
+        hasData: events.length > 0,
+        recordedDays: recordedDateKeys.size,
+        totalAmountMl: normalizeMlAmount(totalAmountMl),
+        soonDepletionCount,
+        topProductName: topProduct?.name || ""
+      };
+    }
+
+    function getUsageCalendarRoutineLabel(eventItem) {
+      const session = String(eventItem?.routineSession || "").toLowerCase();
+      if (session === "morning" || session === "evening") return getRoutineSessionLabel(session);
+      const routineText = String(eventItem?.routine || "").trim();
+      return routineText || "개별 사용";
+    }
+
+    function renderUsageCalendarDayDetail(events = [], dateKey = selectedUsageCalendarDateKey) {
+      const detailEl = document.getElementById("usageCalendarDayDetail");
+      if (!detailEl) return;
+
+      const selectedDate = toDateSafe(`${dateKey}T00:00:00`);
+      const label = selectedDate
+        ? `${selectedDate.getMonth() + 1}월 ${selectedDate.getDate()}일`
+        : "선택한 날짜";
+      const dayEvents = events
+        .filter((eventItem) => {
+          const eventDate = toDateSafe(eventItem?.createdAt);
+          return eventDate && formatDateYmd(eventDate) === dateKey;
+        })
+        .sort((a, b) => {
+          const aTime = toDateSafe(a?.createdAt)?.getTime() || 0;
+          const bTime = toDateSafe(b?.createdAt)?.getTime() || 0;
+          return aTime - bTime;
+        });
+
+      if (!dayEvents.length) {
+        detailEl.innerHTML = `
+          <div class="usage-calendar-detail-card usage-calendar-detail-card--empty">
+            <div class="usage-calendar-detail-date">${escapeHtml(label)}</div>
+            <p>이 날은 아직 사용 기록이 없어요</p>
+          </div>
+        `;
+        return;
+      }
+
+      const { productById, productByName } = getUsageCalendarProductLookups();
+      detailEl.innerHTML = `
+        <div class="usage-calendar-detail-card">
+          <div class="usage-calendar-detail-date">${escapeHtml(label)}</div>
+          <div class="usage-calendar-detail-list">
+            ${dayEvents.map((eventItem) => {
+              const fallbackName = String(eventItem?.productName || "").trim();
+              const product = productById.get(eventItem?.productId) || productByName.get(fallbackName);
+              const productName = String(product?.name || fallbackName || "이름 없는 제품").trim();
+              const amountMl = resolveUsageEventAmountMl(eventItem, productById, productByName);
+              const amountText = Number.isFinite(amountMl) && amountMl > 0 ? `${formatMlValue(amountMl)}ml` : "사용량 계산 중";
+              const eventDate = toDateSafe(eventItem?.createdAt);
+              return `
+                <article class="usage-calendar-detail-item">
+                  <div>
+                    <strong>${escapeHtml(productName)}</strong>
+                    <span>${escapeHtml(getUsageCalendarRoutineLabel(eventItem))}</span>
+                  </div>
+                  <div class="usage-calendar-detail-meta">
+                    <span>${escapeHtml(amountText)}</span>
+                    <span>${escapeHtml(formatHistoryTime(eventDate))}</span>
+                  </div>
+                </article>
+              `;
+            }).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderUsageCalendar(events = historyUsageEvents) {
+      const monthLabelEl = document.getElementById("usageCalendarMonthLabel");
+      const summaryEl = document.getElementById("usageCalendarSummary");
+      const gridEl = document.getElementById("usageCalendarGrid");
+      const emptyMessageEl = document.getElementById("usageCalendarEmptyMessage");
+      if (!monthLabelEl || !summaryEl || !gridEl) return;
+
+      const monthDate = startOfDay(usageCalendarVisibleMonth);
+      monthDate.setDate(1);
+      usageCalendarVisibleMonth = monthDate;
+      const monthEvents = getUsageCalendarMonthEvents(events, monthDate);
+      const summary = getUsageCalendarSummary(monthEvents);
+      const currentMonthKey = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, "0")}`;
+      if (!selectedUsageCalendarDateKey.startsWith(currentMonthKey)) {
+        const today = new Date();
+        selectedUsageCalendarDateKey = isSameMonth(today, monthDate)
+          ? formatDateYmd(today)
+          : formatDateYmd(monthDate);
+      }
+
+      monthLabelEl.textContent = getUsageCalendarMonthLabel(monthDate);
+      if (emptyMessageEl) {
+        emptyMessageEl.textContent = summary.hasData
+          ? "기록한 날을 눌러 하루 사용 내역을 확인하세요"
+          : "제품을 기록하면 사용 캘린더가 채워져요";
+      }
+      summaryEl.innerHTML = `
+        <article class="usage-calendar-summary-item">
+          <span>기록한 날</span>
+          <strong>${summary.recordedDays}일</strong>
+        </article>
+        <article class="usage-calendar-summary-item">
+          <span>총 사용량</span>
+          <strong>${formatMlValue(summary.totalAmountMl)}ml</strong>
+        </article>
+        <article class="usage-calendar-summary-item">
+          <span>곧 소진</span>
+          <strong>${summary.soonDepletionCount}개</strong>
+        </article>
+        <article class="usage-calendar-summary-item usage-calendar-summary-item--product">
+          <span>최다 사용</span>
+          <strong>${escapeHtml(summary.topProductName || "-")}</strong>
+        </article>
+      `;
+
+      const eventCountByDate = new Map();
+      monthEvents.forEach((eventItem) => {
+        const eventDate = toDateSafe(eventItem?.createdAt);
+        if (!eventDate) return;
+        const key = formatDateYmd(eventDate);
+        eventCountByDate.set(key, (eventCountByDate.get(key) || 0) + 1);
+      });
+
+      const firstDay = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+      const lastDay = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
+      const todayKey = formatDateYmd(new Date());
+      const cells = [];
+      for (let i = 0; i < firstDay.getDay(); i += 1) {
+        cells.push('<div class="usage-calendar-day usage-calendar-day--blank" aria-hidden="true"></div>');
+      }
+      for (let day = 1; day <= lastDay.getDate(); day += 1) {
+        const date = new Date(monthDate.getFullYear(), monthDate.getMonth(), day);
+        const dateKey = formatDateYmd(date);
+        const eventCount = eventCountByDate.get(dateKey) || 0;
+        const className = [
+          "usage-calendar-day",
+          eventCount > 0 ? "usage-calendar-day--has-record" : "",
+          dateKey === todayKey ? "usage-calendar-day--today" : "",
+          dateKey === selectedUsageCalendarDateKey ? "usage-calendar-day--selected" : ""
+        ].filter(Boolean).join(" ");
+        cells.push(`
+          <button class="${className}" type="button" data-calendar-date="${dateKey}" aria-pressed="${dateKey === selectedUsageCalendarDateKey ? "true" : "false"}">
+            <span class="usage-calendar-day-number">${day}</span>
+            ${eventCount > 0 ? `<span class="usage-calendar-day-marker" aria-label="${eventCount}건 기록"></span>` : ""}
+          </button>
+        `);
+      }
+      gridEl.innerHTML = cells.join("");
+      renderUsageCalendarDayDetail(monthEvents, selectedUsageCalendarDateKey);
+    }
+
+    function changeUsageCalendarMonth(monthOffset) {
+      const nextMonth = new Date(usageCalendarVisibleMonth);
+      nextMonth.setMonth(nextMonth.getMonth() + monthOffset, 1);
+      usageCalendarVisibleMonth = startOfDay(nextMonth);
+      selectedUsageCalendarDateKey = formatDateYmd(usageCalendarVisibleMonth);
+      renderUsageCalendar(historyUsageEvents);
+    }
+
+    function handleUsageCalendarDateClick(event) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const dayBtn = target.closest("[data-calendar-date]");
+      if (!dayBtn) return;
+      selectedUsageCalendarDateKey = dayBtn.getAttribute("data-calendar-date") || selectedUsageCalendarDateKey;
+      renderUsageCalendar(historyUsageEvents);
+    }
+
     async function renderUsageHistory() {
       const listEl = document.getElementById("historyList");
       if (!listEl) return;
 
       if (shouldSkipFirestoreForDemo()) {
         historyUsageEvents = [];
+        renderUsageCalendar(historyUsageEvents);
         listEl.innerHTML = `
           <div class="history-empty-state">
             <div class="history-empty-title">데모 모드에서는 기록이 고정됩니다</div>
@@ -3711,6 +3952,7 @@
 
       if (isDemoMode()) {
         historyUsageEvents = [];
+        renderUsageCalendar(historyUsageEvents);
         listEl.innerHTML = `
           <div class="history-empty-state">
             <div class="history-empty-title">데모 모드에서는 기록이 고정됩니다</div>
@@ -3722,6 +3964,7 @@
 
       if (!currentUser) {
         historyUsageEvents = [];
+        renderUsageCalendar(historyUsageEvents);
         listEl.innerHTML = `
           <div class="history-empty-state">
             <div class="history-empty-title">로그인하면 기록을 볼 수 있습니다</div>
@@ -5511,6 +5754,51 @@
       return Number.isFinite(time) ? time : Number.MAX_SAFE_INTEGER;
     }
 
+    function getProductEstimatedDaysLeftForPriority(product) {
+      const remainingMl = calculateRemainingMl(product);
+      const perUseMl = Number(product?.perUseMl);
+      const dailyFrequency = getRoutineDailyFrequency(product?.routine, product?.usageFrequencyPerDay);
+      const dailyUsageMl = perUseMl * dailyFrequency;
+      if (
+        !Number.isFinite(remainingMl)
+        || !Number.isFinite(perUseMl)
+        || !Number.isFinite(dailyUsageMl)
+        || dailyUsageMl <= 0
+      ) {
+        return Number.MAX_SAFE_INTEGER;
+      }
+
+      const daysLeft = calculateDaysLeft(product);
+      return Number.isFinite(daysLeft) ? daysLeft : Number.MAX_SAFE_INTEGER;
+    }
+
+    function getTodayRoutinePriorityRank(product) {
+      const currentSession = getCurrentRoutineSession();
+      if (isProductInRoutine(product, currentSession)) return 0;
+      if (isProductInRoutine(product, "morning") || isProductInRoutine(product, "evening")) return 1;
+      return 2;
+    }
+
+    function getProductLastUsedAtTime(product, events = recentUsageEvents) {
+      const productId = String(product?.id || "").trim();
+      const productLastUsedAt = toDateSafe(product?.lastUsedAt || product?.lastUsedDate || product?.lastUsed);
+      let latestTime = productLastUsedAt ? productLastUsedAt.getTime() : Number.NEGATIVE_INFINITY;
+
+      if (!productId) return Number.isFinite(latestTime) ? latestTime : Number.NEGATIVE_INFINITY;
+
+      events.forEach((eventItem) => {
+        if (String(eventItem?.productId || "").trim() !== productId) return;
+        const eventDate = toDateSafe(eventItem?.createdAt);
+        if (!eventDate) return;
+        const eventTime = eventDate.getTime();
+        if (Number.isFinite(eventTime) && eventTime > latestTime) {
+          latestTime = eventTime;
+        }
+      });
+
+      return Number.isFinite(latestTime) ? latestTime : Number.NEGATIVE_INFINITY;
+    }
+
     function hasProductUsageToday(product, events = recentUsageEvents) {
       const productId = String(product?.id || "").trim();
       if (!productId) return false;
@@ -5559,21 +5847,29 @@
 
     function getHomePriorityProduct(products = getHomeDisplayProducts()) {
       if (!products.length) return null;
-      const usageState = buildTodayRoutineUsageState(recentUsageEvents);
 
       return products
         .map((product, index) => ({ product, index }))
         .sort((a, b) => {
-          const aNeedsRecord = doesProductNeedTodayRecord(a.product, usageState);
-          const bNeedsRecord = doesProductNeedTodayRecord(b.product, usageState);
-          if (aNeedsRecord !== bNeedsRecord) return aNeedsRecord ? -1 : 1;
+          const aDaysLeft = getProductEstimatedDaysLeftForPriority(a.product);
+          const bDaysLeft = getProductEstimatedDaysLeftForPriority(b.product);
+          if (aDaysLeft !== bDaysLeft) return aDaysLeft - bDaysLeft;
 
-          const depletionCompare = compareProductsByDepletion(a, b);
-          if (depletionCompare !== 0) return depletionCompare;
+          const aRemainingPercent = calculateRemainingPercent(a.product);
+          const bRemainingPercent = calculateRemainingPercent(b.product);
+          const safeARemainingPercent = Number.isFinite(aRemainingPercent) ? aRemainingPercent : Number.MAX_SAFE_INTEGER;
+          const safeBRemainingPercent = Number.isFinite(bRemainingPercent) ? bRemainingPercent : Number.MAX_SAFE_INTEGER;
+          if (safeARemainingPercent !== safeBRemainingPercent) {
+            return safeARemainingPercent - safeBRemainingPercent;
+          }
 
-          const aUsagePriority = hasProductUsageToday(a.product) ? 1 : 0;
-          const bUsagePriority = hasProductUsageToday(b.product) ? 1 : 0;
-          if (aUsagePriority !== bUsagePriority) return aUsagePriority - bUsagePriority;
+          const aRoutineRank = getTodayRoutinePriorityRank(a.product);
+          const bRoutineRank = getTodayRoutinePriorityRank(b.product);
+          if (aRoutineRank !== bRoutineRank) return aRoutineRank - bRoutineRank;
+
+          const aLastUsedAt = getProductLastUsedAtTime(a.product);
+          const bLastUsedAt = getProductLastUsedAtTime(b.product);
+          if (aLastUsedAt !== bLastUsedAt) return bLastUsedAt - aLastUsedAt;
 
           const aCreatedAt = getProductCreatedAtTime(a.product);
           const bCreatedAt = getProductCreatedAtTime(b.product);
@@ -5799,6 +6095,7 @@
         hasManualPerUseMlInput = false;
       }
 
+      updateMlPresetSelection("productPerUseMl");
       refreshProductMlValidationPreview();
     }
 
@@ -6624,12 +6921,12 @@
     function getTopCtaConfig() {
       const baseConfig = {
         priorityLabel: "지금 할 일",
-        title: "첫 제품 추가하고 기록을 시작하세요",
+        title: "오늘 기록할 제품",
         text: "첫 제품",
         subtext: "D-day",
-        helperText: "제품명만 입력하면 바로 기록할 수 있어요",
+        helperText: "",
         buttonLabel: "지금 기록하기",
-        note: "매일 기록하면 더 정확하게 알려드려요",
+        note: "오늘 사용한 제품만 빠르게 기록하세요",
         mode: "add-product",
         disabled: false
       };
@@ -6638,10 +6935,9 @@
         const demoItem = getDemoModeSoonDepletionItems()[0] || LANDING_DEMO_DEPLETION_ITEMS[0];
         return {
           ...baseConfig,
-          title: "오늘 1개 제품 사용 기록 필요",
+          title: "오늘 기록할 제품",
           text: demoItem?.name || "수분 세럼",
           subtext: getSoonDepletionDdayLabel(demoItem?.daysLeft ?? 3),
-          helperText: "지금 기록하면 소진일이 더 정확해져요",
           buttonLabel: "지금 기록하기",
           mode: "demo"
         };
@@ -6650,10 +6946,9 @@
       if (isLoadingProductCollection) {
         return {
           ...baseConfig,
-          title: "오늘 할 일을 불러오는 중",
+          title: "오늘 기록할 제품",
           text: "불러오는 중",
           subtext: "D-day",
-          helperText: "",
           buttonLabel: "소진일 예측 불러오는 중",
           disabled: true
         };
@@ -6664,7 +6959,7 @@
           ...baseConfig,
           mode: "add-product",
           buttonLabel: "제품 추가",
-          note: "제품을 먼저 추가하면 소진일 계산을 바로 시작할 수 있어요"
+          note: "제품 1개만 추가하면 바로 기록할 수 있어요"
         };
       }
 
@@ -6675,7 +6970,7 @@
           ...baseConfig,
           mode: "add-product",
           buttonLabel: "제품 추가",
-          note: "제품을 먼저 추가하면 소진일 계산을 바로 시작할 수 있어요"
+          note: "제품 1개만 추가하면 바로 기록할 수 있어요"
         };
       }
 
@@ -6684,12 +6979,11 @@
       const routineSession = getPriorityProductRoutineSession(priorityProduct);
       return {
         ...baseConfig,
-        title: "오늘 사용한 제품 지금 기록하세요",
+        title: "오늘 기록할 제품",
         text: productName || "제품",
         subtext: getProductDdayLabel(daysLeft),
-        helperText: "지금 기록해야 소진일이 정확해져요",
         buttonLabel: "지금 기록하기",
-        note: "매일 기록하면 더 정확하게 알려드려요",
+        note: "오늘 사용한 제품만 빠르게 기록하세요",
         mode: "routine",
         productId: priorityProduct.id,
         routineSession
@@ -7324,8 +7618,8 @@
     }
 
     function promptLoginForDemoProductSave() {
-      showAuthMessage("저장하려면 로그인이 필요해요");
-      showToast("저장하려면 로그인이 필요해요", "로그인하면 입력한 제품을 내 루틴에 바로 추가할 수 있어요.", 2600, {
+      showAuthMessage("먼저 체험해볼 수 있어요");
+      showToast("먼저 체험해볼 수 있어요", "로그인하면 입력한 제품을 내 루틴에 저장할 수 있어요.", 2600, {
         placement: "top"
       });
     }
@@ -7460,6 +7754,43 @@
 
     function resetProductFormTouchedFields() {
       productFormTouchedFields.clear();
+    }
+
+    function updateMlPresetSelection(targetId) {
+      const inputEl = document.getElementById(targetId);
+      const currentValue = inputEl ? inputEl.value.trim() : "";
+      document.querySelectorAll(`.ml-preset-chip[data-ml-preset-target="${targetId}"]`).forEach((chipEl) => {
+        const presetValue = chipEl.getAttribute("data-ml-preset-value") || "";
+        chipEl.classList.toggle("ml-preset-chip--selected", Boolean(currentValue) && currentValue === presetValue);
+      });
+    }
+
+    function updateAllMlPresetSelections() {
+      ["quickAddTotalMl", "quickAddPerUseMl", "productTotalMl", "productPerUseMl"].forEach(updateMlPresetSelection);
+    }
+
+    function handleMlPresetChipClick(event) {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+
+      const chipEl = target.closest("[data-ml-preset-target][data-ml-preset-value]");
+      if (!chipEl) return;
+
+      const targetId = chipEl.getAttribute("data-ml-preset-target");
+      const presetValue = chipEl.getAttribute("data-ml-preset-value");
+      const inputEl = targetId ? document.getElementById(targetId) : null;
+      if (!inputEl || presetValue === null || inputEl.disabled) return;
+
+      inputEl.value = presetValue;
+      if (targetId === "productTotalMl" || targetId === "productPerUseMl") {
+        markProductFormFieldTouched(targetId);
+      }
+      if (targetId === "productPerUseMl") {
+        hasManualPerUseMlInput = true;
+      }
+
+      inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+      updateMlPresetSelection(targetId);
     }
 
     function getProductStartType() {
@@ -8008,6 +8339,7 @@
         document.getElementById("productUsageFrequencyPerDay").value = "";
         clearProductMlValidationErrors();
         resetProductFormTouchedFields();
+        updateAllMlPresetSelections();
         setProductStartType("new");
         setProductBrandFieldExpanded(false);
         setProductDetailsExpanded(false);
@@ -9667,6 +9999,13 @@
       document.getElementById("historyFilterAllBtn").addEventListener("click", () => {
         setHistoryFilterMode("all");
       });
+      document.getElementById("usageCalendarPrevBtn")?.addEventListener("click", () => {
+        changeUsageCalendarMonth(-1);
+      });
+      document.getElementById("usageCalendarNextBtn")?.addEventListener("click", () => {
+        changeUsageCalendarMonth(1);
+      });
+      document.getElementById("usageCalendarGrid")?.addEventListener("click", handleUsageCalendarDateClick);
       document.getElementById("productListSort")?.addEventListener("change", (event) => {
         setProductListSortMode(event.target.value);
       });
@@ -9729,6 +10068,7 @@
       document.getElementById("quickProductNames")?.addEventListener("input", () => {
         updateQuickAddButtonState();
       });
+      document.getElementById("productAddSection")?.addEventListener("click", handleMlPresetChipClick);
       document.getElementById("quickAddRoutine")?.addEventListener("change", () => {
         updateQuickAddButtonState();
       });
@@ -9740,9 +10080,11 @@
       ["quickAddTotalMl", "quickAddCurrentMl", "quickAddPerUseMl"].forEach((fieldId) => {
         const inputEl = document.getElementById(fieldId);
         inputEl?.addEventListener("input", () => {
+          updateMlPresetSelection(fieldId);
           updateQuickAddButtonState();
         });
         inputEl?.addEventListener("blur", () => {
+          updateMlPresetSelection(fieldId);
           updateQuickAddButtonState();
         });
       });
@@ -9835,10 +10177,12 @@
       });
       document.getElementById("productTotalMl").addEventListener("input", () => {
         markProductFormFieldTouched("productTotalMl");
+        updateMlPresetSelection("productTotalMl");
         refreshProductMlValidationPreview();
       });
       document.getElementById("productTotalMl").addEventListener("blur", () => {
         markProductFormFieldTouched("productTotalMl");
+        updateMlPresetSelection("productTotalMl");
         refreshProductMlValidationPreview();
       });
       document.querySelectorAll('input[name="productStartType"]').forEach((radioEl) => {
@@ -9857,10 +10201,12 @@
       document.getElementById("productPerUseMl").addEventListener("input", (event) => {
         markProductFormFieldTouched("productPerUseMl");
         hasManualPerUseMlInput = event.currentTarget.value.trim() !== "";
+        updateMlPresetSelection("productPerUseMl");
         refreshProductMlValidationPreview();
       });
       document.getElementById("productPerUseMl").addEventListener("blur", () => {
         markProductFormFieldTouched("productPerUseMl");
+        updateMlPresetSelection("productPerUseMl");
         refreshProductMlValidationPreview();
       });
       document.getElementById("productRoutine").addEventListener("change", () => {
