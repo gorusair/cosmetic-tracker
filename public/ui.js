@@ -1112,6 +1112,7 @@
 
     function getVisitQueryContext() {
       return {
+        from: normalizeVisitTrackingText(queryParams.get("from")),
         utmSource: normalizeVisitTrackingText(queryParams.get("utm_source")),
         utmMedium: normalizeVisitTrackingText(queryParams.get("utm_medium")),
         utmCampaign: normalizeVisitTrackingText(queryParams.get("utm_campaign")),
@@ -1143,6 +1144,7 @@
     }
 
     function resolveVisitSource(visitContext = getVisitQueryContext()) {
+      if (visitContext.from) return visitContext.from;
       if (visitContext.utmSource) return visitContext.utmSource;
       if (visitContext.ref) return visitContext.ref;
       if (visitContext.legacySource) return visitContext.legacySource;
@@ -1151,7 +1153,8 @@
 
     function shouldBypassVisitLogCache(visitContext = getVisitQueryContext()) {
       return Boolean(
-        visitContext.utmSource
+        visitContext.from
+        || visitContext.utmSource
         || visitContext.utmMedium
         || visitContext.utmCampaign
         || visitContext.ref
@@ -1166,9 +1169,21 @@
 
     function getVisitUserContext(user = null) {
       const uid = normalizeVisitTrackingText(user?.uid);
+      const hasUser = Boolean(user);
       return {
+        authType: hasUser ? (user.isAnonymous === true ? "anonymous" : "google") : "guest",
         isAnonymous: user?.isAnonymous === true,
+        isLoggedIn: hasUser,
         uid: uid || null
+      };
+    }
+
+    function getVisitLocationContext() {
+      return {
+        host: window.location.hostname || "",
+        path: window.location.pathname || "",
+        fullUrl: window.location.href || "",
+        search: window.location.search || ""
       };
     }
 
@@ -1181,15 +1196,22 @@
       const loggedDate = normalizeVisitTrackingText(options.loggedDate, getVisitLoggedDate());
       const readableTime = normalizeVisitTrackingText(options.readableTime, getVisitReadableTime());
       const visitContext = getVisitQueryContext();
-      const { isAnonymous, uid } = getVisitUserContext(user);
+      const locationContext = getVisitLocationContext();
+      const { authType, isAnonymous, isLoggedIn, uid } = getVisitUserContext(user);
       const basePayload = {
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         page: window.location.pathname,
+        host: locationContext.host,
+        path: locationContext.path,
+        fullUrl: locationContext.fullUrl,
+        search: locationContext.search,
         source: resolveVisitSource(visitContext),
         referrer: document.referrer || "",
         userAgent: navigator.userAgent || "",
         language: navigator.language || "",
+        authType,
         isAnonymous,
+        isLoggedIn,
         uid,
         loggedDate
       };
@@ -1206,6 +1228,7 @@
 
       return {
         ...payloadWithReadableTime,
+        from: visitContext.from,
         utmSource: visitContext.utmSource,
         utmMedium: visitContext.utmMedium,
         utmCampaign: visitContext.utmCampaign,
@@ -2040,8 +2063,8 @@
       }
       if (totalMlHelpEl) {
         totalMlHelpEl.textContent = isUsedProduct
-          ? "사용 중인 제품의 처음 총 용량을 입력해주세요"
-          : "비워두면 100ml로 등록돼요";
+          ? "사용 중인 제품의 처음 총 용량을 대략 입력해주세요"
+          : "잘 모르겠다면 100ml로 시작해도 괜찮아요";
       }
       if (!isUsedProduct) {
         setProductInputError("quickAddCurrentMl", "");
@@ -2128,13 +2151,13 @@
       }
 
       if (perUseMlRaw && !Number.isFinite(perUseMlNumeric)) {
-        perUseMlError = "1회 사용량은 숫자로 입력해주세요";
+        perUseMlError = "한 번에 쓰는 양은 숫자로 입력해주세요";
         if (!firstInvalidEl) firstInvalidEl = perUseMlInputEl;
       } else if (perUseMlRaw && perUseMlNumeric <= 0) {
-        perUseMlError = "1회 사용량은 0보다 크게 입력해주세요";
+        perUseMlError = "한 번에 쓰는 양은 0보다 크게 입력해주세요";
         if (!firstInvalidEl) firstInvalidEl = perUseMlInputEl;
       } else if (perUseMlRaw && !totalMlError && perUseMlNumeric > resolvedTotalMl) {
-        perUseMlError = "1회 사용량은 총 용량보다 작거나 같게 입력해주세요";
+        perUseMlError = "한 번에 쓰는 양은 총 용량보다 작거나 같게 입력해주세요";
         if (!firstInvalidEl) firstInvalidEl = perUseMlInputEl;
       }
 
@@ -3274,7 +3297,7 @@
             <strong class="product-detail-stat-value">${formatMlValue(remainingMl)}ml</strong>
           </div>
           <div class="product-detail-stat">
-            <span class="product-detail-stat-label">1회 사용량</span>
+            <span class="product-detail-stat-label">평소 한 번 쓰는 양</span>
             <strong class="product-detail-stat-value">${formatMlValue(perUseMl)}ml</strong>
           </div>
           <div class="product-detail-stat">
@@ -3290,6 +3313,7 @@
             <strong class="product-detail-stat-value">${estimatedDepletionDate}</strong>
           </div>
         </div>
+        <p class="usage-input-help">최근 기록 기준 예상이에요. 기록할수록 더 정확해져요.</p>
 
         <section class="product-detail-log-section" aria-label="최근 사용 기록">
           <div class="product-detail-section-title">최근 사용 기록</div>
@@ -3354,7 +3378,7 @@
       const product = activeProducts.find((item) => item.id === productId);
       if (descEl && product) {
         const daysLeft = calculateDaysLeft(product);
-        descEl.textContent = `${getProductDdayLabel(daysLeft)} · 예상 소진일 ${formatEstimatedDepletionDate(daysLeft)}. 이제 사용 기록으로 예측을 더 정확하게 만들 수 있어요.`;
+        descEl.textContent = `${getProductDdayLabel(daysLeft)} · 대략적인 소진 시점 ${formatEstimatedDepletionDate(daysLeft)}. 기록할수록 예측이 더 정확해져요.`;
       }
 
       markFirstProductSuccessSeen();
@@ -4751,7 +4775,7 @@
               </div>
             </label>
             <label class="product-setup-field">
-              <span>1회 사용량</span>
+              <span>평소 한 번 쓰는 양</span>
               <div class="product-setup-input-with-unit">
                 <input
                   class="product-setup-input"
@@ -4984,7 +5008,7 @@
           <button class="btn-danger stop-product-btn" data-product-id="${product.id}">중단</button>
           ${product.isSample ? `
             <div class="sample-product-note">
-              샘플 제품입니다. 내 제품을 등록하면 실제 소진일을 계산할 수 있어요.
+              샘플 제품입니다. 내 제품을 등록하면 대략적인 소진 시점을 예측할 수 있어요.
             </div>
           ` : ""}
         </div>
@@ -5210,7 +5234,7 @@
       }
 
       if (dateEl) {
-        dateEl.textContent = `예상 소진일 ${estimatedDepletionDate}`;
+        dateEl.textContent = `대략적인 소진 시점 ${estimatedDepletionDate} · 최근 기록 기준 예상이에요`;
         dateEl.classList.toggle("product-depletion-date--spotlight", shouldHighlightRecentUse);
       }
 
@@ -5825,24 +5849,24 @@
 
     function getHeroActionUrgencyMessage(product) {
       if (doesProductNeedTodayRecord(product)) {
-        return "지금 기록 안 하면 소진일이 부정확해져요";
+        return "대략 기록해도 구매 타이밍을 더 잘 맞출 수 있어요";
       }
       if (hasProductUsageToday(product)) {
-        return "추가 사용했다면 지금 기록해야 잔량이 맞아요";
+        return "추가 사용했다면 대략 기록해두면 좋아요";
       }
       const daysLeft = calculateDaysLeft(product);
       const displayDaysLeft = getDisplayDaysLeft(daysLeft);
       if (displayDaysLeft <= PURCHASE_URGENT_DAYS_THRESHOLD) {
-        return "곧 끊길 수 있어 지금 기록하고 구매 타이밍을 확인하세요";
+        return "곧 떨어질 수 있어 구매 타이밍을 확인해보세요";
       }
       if (displayDaysLeft <= SOON_DEPLETION_DAYS_THRESHOLD) {
-        return "오늘 기록해야 남은 기간 계산이 더 정확해져요";
+        return "오늘 기록하면 남은 기간 예상이 더 좋아져요";
       }
-      return "사용 직후 기록하면 남은 기간 계산이 바로 맞춰져요";
+      return "편한 때 기록하면 남은 기간을 다시 예상해드려요";
     }
 
     function getHomePriorityActionMessage(daysLeft) {
-      return "지금 기록하면 이 D-day가 바로 업데이트돼요";
+      return "지금 기록하면 D-day 예상이 바로 업데이트돼요";
     }
 
     function getHomePriorityProduct(products = getHomeDisplayProducts()) {
@@ -5940,7 +5964,7 @@
       if (!priorityProduct) {
         listEl.innerHTML = getHomePriorityEmptyMarkup();
         if (noteEl) {
-          noteEl.textContent = "첫 제품을 추가하면 홈에서 바로 D-day와 구매 타이밍을 확인할 수 있습니다";
+          noteEl.textContent = "첫 제품을 대략 추가하면 홈에서 D-day 예상과 구매 타이밍을 확인할 수 있습니다";
         }
         renderTopCta();
         return;
@@ -5952,7 +5976,7 @@
         applyProgressBar(priorityProgressEl, priorityProgressEl.getAttribute("aria-valuenow"));
       }
       if (noteEl) {
-        noteEl.textContent = "사용 기록을 남기면 잔량과 D-day가 홈에서 바로 다시 계산됩니다";
+        noteEl.textContent = "사용 기록을 남기면 잔량과 D-day 예상이 홈에서 다시 계산됩니다";
       }
       renderTopCta();
     }
@@ -6028,7 +6052,7 @@
       }
 
       scrollToProductCreationForm({ focusInput: true, activateRecord: false });
-      showToast("제품을 먼저 추가해주세요", "추가하면 D-day와 예상 소진일을 바로 보여드릴게요.", 2200, {
+      showToast("제품을 먼저 추가해주세요", "대략 추가하면 D-day와 예상 소진 시점을 보여드릴게요.", 2200, {
         placement: "top"
       });
     }
@@ -6082,7 +6106,7 @@
       const category = categoryEl.value;
       const recommendation = CATEGORY_USAGE_RECOMMENDATIONS[category];
       if (!recommendation) {
-        recommendationEl.textContent = "카테고리에 맞게 1회 사용량을 자유롭게 입력해보세요.";
+        recommendationEl.textContent = "카테고리에 맞게 평소 한 번 쓰는 양을 대략 선택해보세요.";
       } else {
         recommendationEl.textContent = recommendation;
       }
@@ -6949,7 +6973,7 @@
           title: "오늘 기록할 제품",
           text: "불러오는 중",
           subtext: "D-day",
-          buttonLabel: "소진일 예측 불러오는 중",
+          buttonLabel: "소진 시점 예측 불러오는 중",
           disabled: true
         };
       }
@@ -7172,7 +7196,7 @@
       }, durationMs);
     }
 
-    function showRoutineToast(title = "사용 완료!", description = "잔량과 D-day가 업데이트됐어요") {
+    function showRoutineToast(title = "사용 완료!", description = "잔량과 D-day 예상이 업데이트됐어요") {
       let toastEl = document.getElementById("routineToastCard");
       if (!toastEl) {
         toastEl = document.createElement("div");
@@ -7810,8 +7834,8 @@
       }
       if (totalMlHelpEl) {
         totalMlHelpEl.textContent = isUsedProduct
-          ? "사용 중인 제품의 처음 총 용량을 입력해주세요"
-          : "비워두면 100ml로 시작해요";
+          ? "사용 중인 제품의 처음 총 용량을 대략 입력해주세요"
+          : "잘 모르겠다면 100ml로 시작해도 괜찮아요";
       }
       if (!isUsedProduct) {
         setProductInputError("productCurrentMl", "");
@@ -7996,13 +8020,13 @@
       }
 
       if (perUseMlRaw && !Number.isFinite(perUseMlNumeric)) {
-        perUseMlError = "1회 사용량은 숫자로 입력해주세요";
+        perUseMlError = "한 번에 쓰는 양은 숫자로 입력해주세요";
         if (!firstInvalidEl) firstInvalidEl = perUseMlInputEl;
       } else if (perUseMlRaw && perUseMlNumeric <= 0) {
-        perUseMlError = "1회 사용량은 0보다 크게 입력해주세요";
+        perUseMlError = "한 번에 쓰는 양은 0보다 크게 입력해주세요";
         if (!firstInvalidEl) firstInvalidEl = perUseMlInputEl;
       } else if (perUseMlRaw && !totalMlError && perUseMlNumeric > resolvedTotalMl) {
-        perUseMlError = "1회 사용량은 총 용량보다 작거나 같게 입력해주세요";
+        perUseMlError = "한 번에 쓰는 양은 총 용량보다 작거나 같게 입력해주세요";
         if (!firstInvalidEl) firstInvalidEl = perUseMlInputEl;
       }
 
@@ -8180,7 +8204,7 @@
       const daysLeft = calculateDaysLeft(product);
       const depletionDate = formatEstimatedDepletionDate(daysLeft);
       const ddayText = getProductDdayLabel(daysLeft);
-      showToast("제품 추가 완료", `${ddayText} · 예상 소진일 ${depletionDate}`, PRODUCT_ADD_SUCCESS_TOAST_DURATION_MS, {
+      showToast("제품 추가 완료", `${ddayText} · 대략적인 소진 시점 ${depletionDate}`, PRODUCT_ADD_SUCCESS_TOAST_DURATION_MS, {
         variant: "success",
         placement: "top"
       });
@@ -8667,7 +8691,7 @@
           isValid: false,
           row,
           firstInvalidEl: perUseMlEl,
-          error: "1회 사용량은 0보다 크게 입력해주세요"
+          error: "한 번에 쓰는 양은 0보다 크게 입력해주세요"
         };
       }
 
@@ -8676,7 +8700,7 @@
           isValid: false,
           row,
           firstInvalidEl: perUseMlEl,
-          error: "1회 사용량은 총 용량보다 작거나 같게 입력해주세요"
+          error: "한 번에 쓰는 양은 총 용량보다 작거나 같게 입력해주세요"
         };
       }
 
@@ -8757,7 +8781,7 @@
           setupCompletedAt: new Date()
         }));
         renderActiveProductsList();
-        showToast("설정이 저장되었습니다", "소진 예측 정확도가 높아졌어요", PRODUCT_ADD_SUCCESS_TOAST_DURATION_MS, {
+        showToast("설정이 저장되었습니다", "소진 시점 예상이 업데이트됐어요", PRODUCT_ADD_SUCCESS_TOAST_DURATION_MS, {
           variant: "success",
           placement: "top"
         });
@@ -9098,8 +9122,8 @@
               lines: [
                 `→ ${product.name || "제품"} 사용량 반영됨`,
                 daysReduced > 0
-                  ? `→ 소진일 ${daysReduced}일 앞당겨짐`
-                  : `→ 예상 소진일 ${formatEstimatedDepletionDate(nextDaysLeftRaw)}로 다시 계산됨`
+                  ? `→ 예상 소진 시점 ${daysReduced}일 앞당겨짐`
+                  : `→ 대략적인 소진 시점 ${formatEstimatedDepletionDate(nextDaysLeftRaw)}로 다시 계산됨`
               ],
               streakText: streakState.count > 0 ? `🔥 ${streakState.count}일 연속 루틴 완료` : ""
             });
@@ -9111,7 +9135,7 @@
           if (normalizedSession) {
             showRoutineToast();
           } else if (isFirstUsageAction) {
-            showToast("사용 완료!", "잔량과 D-day가 업데이트됐어요", 1800, {
+            showToast("사용 완료!", "잔량과 D-day 예상이 업데이트됐어요", 1800, {
               variant: "success"
             });
           } else {
