@@ -338,7 +338,7 @@
         <p class="routine-score-label">내 루틴 관리 점수</p>
         <div class="routine-score-value" aria-live="polite">
           <strong id="routineScoreValue">0</strong>점
-          <span id="routineScoreBadge" class="routine-score-badge hidden" aria-hidden="true">관리 상태가 좋아요</span>
+          <span id="routineScoreBadge" class="routine-score-badge hidden" aria-hidden="true"></span>
         </div>
         <p id="routineScoreStatus" class="routine-score-status">제품을 추가하면 루틴 점수를 계산해드려요</p>
         <p id="routineScoreMessage" class="routine-score-desc">
@@ -793,27 +793,6 @@
         aria-hidden="true"
         hidden
       >
-        <div class="popular-products-header">
-          <div>
-            <h3>🔥 사람들이 많이 찾는 제품</h3>
-            <p class="popular-products-subtitle">최근 클릭이 많은 제품을 바로 살펴보세요</p>
-          </div>
-        </div>
-        <div id="popularProductsList" class="popular-products-grid"></div>
-        <div id="popularProductsEmpty" class="popular-products-empty hidden" aria-hidden="true">
-          <div class="engagement-empty-card popular-products-empty-card">
-            <div class="engagement-empty-icon popular-products-empty-icon" aria-hidden="true">📦</div>
-            <div class="engagement-empty-title popular-products-empty-title">아직 데이터가 없어요</div>
-            <div class="engagement-empty-desc popular-products-empty-desc">첫 번째 기록을 남겨보세요</div>
-            <button
-              type="button"
-              class="engagement-empty-cta popular-products-empty-cta"
-              data-popular-empty-action="add-product"
-            >
-              제품 등록하기
-            </button>
-          </div>
-        </div>
       </section>
 
       <section class="secondary-insights-group" aria-label="보조 기록 기능">

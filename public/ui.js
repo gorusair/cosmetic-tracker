@@ -2595,32 +2595,16 @@
       const hasVisibleProduct = activeProducts.some((product) => !isSampleProduct(product));
       const displayScore = hasVisibleProduct ? scoreState.score : 0;
       valueEl.textContent = String(displayScore);
-      let statusText = "제품을 추가하면 루틴 점수를 계산해드려요";
-      let messageText = "먼저 제품을 등록해보세요";
-      let shouldShowBadge = false;
+      const scoreCopy = getRoutineScoreCopy(hasVisibleProduct, displayScore);
 
-      if (hasVisibleProduct && displayScore <= 0) {
-        statusText = "아직 기록이 부족해요";
-        messageText = "제품을 사용하면 점수가 올라가요";
-      } else if (displayScore >= 80) {
-        statusText = "관리 상태가 좋아요";
-        messageText = "소진 시점과 구매 타이밍을 계속 추적 중이에요";
-        shouldShowBadge = true;
-      } else if (displayScore >= 50) {
-        statusText = "루틴을 이어가고 있어요";
-        messageText = "사용 기록을 남기면 D-day 예상이 더 좋아져요";
-      } else if (displayScore >= 1) {
-        statusText = "조금씩 기록을 쌓아보세요";
-        messageText = "제품을 사용하면 점수가 올라가요";
-      }
-
-      messageEl.textContent = messageText;
+      messageEl.textContent = scoreCopy.messageText;
       if (statusEl) {
-        statusEl.textContent = statusText;
+        statusEl.textContent = scoreCopy.statusText;
       }
       if (badgeEl) {
-        badgeEl.classList.toggle("hidden", !shouldShowBadge);
-        badgeEl.setAttribute("aria-hidden", shouldShowBadge ? "false" : "true");
+        badgeEl.textContent = scoreCopy.shouldShowBadge ? scoreCopy.statusText : "";
+        badgeEl.classList.toggle("hidden", !scoreCopy.shouldShowBadge);
+        badgeEl.setAttribute("aria-hidden", scoreCopy.shouldShowBadge ? "false" : "true");
       }
       cardEl.classList.remove("hidden");
       cardEl.hidden = false;
@@ -2633,6 +2617,46 @@
       }
 
       cardEl.classList.remove("routine-score-card--empty");
+    }
+
+    function getRoutineScoreCopy(hasVisibleProduct, score) {
+      if (!hasVisibleProduct) {
+        return {
+          statusText: "제품을 추가하면 루틴 점수를 계산해드려요",
+          messageText: "먼저 제품을 등록해보세요",
+          shouldShowBadge: false
+        };
+      }
+
+      if (score <= 0) {
+        return {
+          statusText: "아직 기록이 부족해요",
+          messageText: "제품을 사용하면 점수가 올라가요",
+          shouldShowBadge: false
+        };
+      }
+
+      if (score < 50) {
+        return {
+          statusText: "조금씩 기록을 쌓아보세요",
+          messageText: "제품을 사용하면 점수가 올라가요",
+          shouldShowBadge: false
+        };
+      }
+
+      if (score < 80) {
+        return {
+          statusText: "루틴을 이어가고 있어요",
+          messageText: "사용 기록을 남기면 D-day 예상이 더 좋아져요",
+          shouldShowBadge: false
+        };
+      }
+
+      return {
+        statusText: "관리 상태가 좋아요",
+        messageText: "소진 시점과 구매 타이밍을 계속 추적 중이에요",
+        shouldShowBadge: true
+      };
     }
 
     function getCurrentMonthStartDate(referenceDate = new Date()) {

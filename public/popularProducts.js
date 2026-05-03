@@ -11,9 +11,7 @@ const db = getFirebaseDb();
 
 function getPopularProductsElements() {
   return {
-    sectionEl: document.getElementById("popularProductsSection"),
-    listEl: document.getElementById("popularProductsList"),
-    emptyEl: document.getElementById("popularProductsEmpty")
+    sectionEl: document.getElementById("popularProductsSection")
   };
 }
 
@@ -27,45 +25,6 @@ function shouldSkipFirestoreForDemo() {
     return true;
   }
   return false;
-}
-
-function getPreferredScrollBehavior() {
-  return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    ? "auto"
-    : "smooth";
-}
-
-function openProductRegistrationFromEmptyState() {
-  if (typeof window.scrollToProductFormSection === "function") {
-    window.scrollToProductFormSection({ focusInput: true });
-    return;
-  }
-
-  if (typeof window.scrollToProductCreationForm === "function") {
-    window.scrollToProductCreationForm({ focusInput: true });
-    return;
-  }
-
-  const targetEl = document.getElementById("productCreationCard") || document.getElementById("product-section");
-  targetEl?.scrollIntoView({ behavior: getPreferredScrollBehavior(), block: "start" });
-  document.getElementById("productName")?.focus();
-}
-
-function getPopularProductsEmptyMarkup() {
-  return `
-    <div class="engagement-empty-card popular-products-empty-card">
-      <div class="engagement-empty-icon popular-products-empty-icon" aria-hidden="true">📦</div>
-      <div class="engagement-empty-title popular-products-empty-title">아직 데이터가 없어요</div>
-      <div class="engagement-empty-desc popular-products-empty-desc">첫 번째 기록을 남겨보세요</div>
-      <button
-        type="button"
-        class="engagement-empty-cta popular-products-empty-cta"
-        data-popular-empty-action="add-product"
-      >
-        제품 등록하기
-      </button>
-    </div>
-  `;
 }
 
 function getTimestampMillis(value) {
@@ -139,30 +98,36 @@ function aggregatePopularProducts(clicks = []) {
     .slice(0, POPULAR_PRODUCT_DISPLAY_LIMIT);
 }
 
+function getRenderablePopularProducts(products) {
+  if (!Array.isArray(products)) return [];
+
+  return products.filter((item) => {
+    return item && String(item.productName || "").trim().length > 0;
+  });
+}
+
 function renderPopularProducts(products = []) {
-  const { sectionEl, listEl, emptyEl } = getPopularProductsElements();
-  if (!sectionEl || !listEl || !emptyEl) return;
+  const { sectionEl } = getPopularProductsElements();
+  if (!sectionEl) return;
 
-  renderedPopularProducts = products;
-  const hasProducts = products.length > 0;
-
-  sectionEl.classList.toggle("hidden", !hasProducts);
-  sectionEl.hidden = !hasProducts;
-  sectionEl.setAttribute("aria-hidden", hasProducts ? "false" : "true");
-  listEl.classList.toggle("hidden", !hasProducts);
-  listEl.hidden = !hasProducts;
-  listEl.setAttribute("aria-hidden", hasProducts ? "false" : "true");
-  emptyEl.classList.add("hidden");
-  emptyEl.hidden = true;
-  emptyEl.setAttribute("aria-hidden", "true");
+  const renderableProducts = getRenderablePopularProducts(products);
+  renderedPopularProducts = renderableProducts;
+  const hasProducts = renderableProducts.length > 0;
 
   if (!hasProducts) {
-    listEl.innerHTML = "";
-    emptyEl.innerHTML = "";
+    sectionEl.classList.add("hidden");
+    sectionEl.hidden = true;
+    sectionEl.setAttribute("aria-hidden", "true");
+    sectionEl.innerHTML = "";
     return;
   }
 
-  listEl.innerHTML = products.map((item, index) => `
+  sectionEl.classList.remove("hidden");
+  sectionEl.hidden = false;
+  sectionEl.removeAttribute("hidden");
+  sectionEl.removeAttribute("aria-hidden");
+
+  const productCardsMarkup = renderableProducts.map((item, index) => `
     <article class="popular-product-card">
       <div class="popular-product-rank">TOP ${index + 1}</div>
       <div class="popular-product-name">${item.productName}</div>
@@ -177,6 +142,18 @@ function renderPopularProducts(products = []) {
       </button>
     </article>
   `).join("");
+
+  sectionEl.innerHTML = `
+    <div class="popular-products-header">
+      <div>
+        <h3>🔥 사람들이 많이 찾는 제품</h3>
+        <p class="popular-products-subtitle">최근 클릭이 많은 제품을 바로 살펴보세요</p>
+      </div>
+    </div>
+    <div id="popularProductsList" class="popular-products-grid">
+      ${productCardsMarkup}
+    </div>
+  `;
 }
 
 export async function renderPopularProductsSection() {
@@ -202,10 +179,10 @@ function schedulePopularProductsRefresh() {
 }
 
 function bindPopularProductsEvents() {
-  const { listEl, emptyEl } = getPopularProductsElements();
-  if (!listEl) return;
+  const { sectionEl } = getPopularProductsElements();
+  if (!sectionEl) return;
 
-  listEl.addEventListener("click", async (event) => {
+  sectionEl.addEventListener("click", async (event) => {
     const target = event.target;
     if (!(target instanceof Element)) return;
 
@@ -224,17 +201,6 @@ function bindPopularProductsEvents() {
       "naver",
       getCurrentUser()
     );
-  });
-
-  emptyEl?.addEventListener("click", (event) => {
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-
-    const actionButton = target.closest('[data-popular-empty-action="add-product"]');
-    if (!actionButton) return;
-
-    event.preventDefault();
-    openProductRegistrationFromEmptyState();
   });
 }
 
