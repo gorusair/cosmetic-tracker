@@ -147,9 +147,13 @@ function renderPopularProducts(products = []) {
   const hasProducts = products.length > 0;
 
   sectionEl.classList.toggle("hidden", !hasProducts);
+  sectionEl.hidden = !hasProducts;
   sectionEl.setAttribute("aria-hidden", hasProducts ? "false" : "true");
   listEl.classList.toggle("hidden", !hasProducts);
+  listEl.hidden = !hasProducts;
+  listEl.setAttribute("aria-hidden", hasProducts ? "false" : "true");
   emptyEl.classList.add("hidden");
+  emptyEl.hidden = true;
   emptyEl.setAttribute("aria-hidden", "true");
 
   if (!hasProducts) {

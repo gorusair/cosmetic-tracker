@@ -2592,13 +2592,33 @@
       if (!cardEl || !valueEl || !messageEl) return;
 
       const scoreState = calculateRoutineScore();
-      valueEl.textContent = String(scoreState.score);
-      messageEl.textContent = "루틴 상태를 간단히 보여드려요";
+      const hasVisibleProduct = activeProducts.some((product) => !isSampleProduct(product));
+      const displayScore = hasVisibleProduct ? scoreState.score : 0;
+      valueEl.textContent = String(displayScore);
+      let statusText = "제품을 추가하면 루틴 점수를 계산해드려요";
+      let messageText = "먼저 제품을 등록해보세요";
+      let shouldShowBadge = false;
+
+      if (hasVisibleProduct && displayScore <= 0) {
+        statusText = "아직 기록이 부족해요";
+        messageText = "제품을 사용하면 점수가 올라가요";
+      } else if (displayScore >= 80) {
+        statusText = "관리 상태가 좋아요";
+        messageText = "소진 시점과 구매 타이밍을 계속 추적 중이에요";
+        shouldShowBadge = true;
+      } else if (displayScore >= 50) {
+        statusText = "루틴을 이어가고 있어요";
+        messageText = "사용 기록을 남기면 D-day 예상이 더 좋아져요";
+      } else if (displayScore >= 1) {
+        statusText = "조금씩 기록을 쌓아보세요";
+        messageText = "제품을 사용하면 점수가 올라가요";
+      }
+
+      messageEl.textContent = messageText;
       if (statusEl) {
-        statusEl.textContent = "오늘 관리 상태";
+        statusEl.textContent = statusText;
       }
       if (badgeEl) {
-        const shouldShowBadge = scoreState.score >= 100;
         badgeEl.classList.toggle("hidden", !shouldShowBadge);
         badgeEl.setAttribute("aria-hidden", shouldShowBadge ? "false" : "true");
       }
@@ -2607,7 +2627,7 @@
       cardEl.removeAttribute("hidden");
       cardEl.setAttribute("aria-hidden", "false");
 
-      if (!scoreState.hasRegisteredProduct) {
+      if (!hasVisibleProduct) {
         cardEl.classList.add("routine-score-card--empty");
         return;
       }

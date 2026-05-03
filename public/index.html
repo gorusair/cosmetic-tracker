@@ -338,11 +338,11 @@
         <p class="routine-score-label">내 루틴 관리 점수</p>
         <div class="routine-score-value" aria-live="polite">
           <strong id="routineScoreValue">0</strong>점
-          <span id="routineScoreBadge" class="routine-score-badge hidden">관리 상태 좋음</span>
+          <span id="routineScoreBadge" class="routine-score-badge hidden" aria-hidden="true">관리 상태가 좋아요</span>
         </div>
-        <p id="routineScoreStatus" class="routine-score-status">오늘 루틴 관리 상태가 좋아요</p>
+        <p id="routineScoreStatus" class="routine-score-status">제품을 추가하면 루틴 점수를 계산해드려요</p>
         <p id="routineScoreMessage" class="routine-score-desc">
-          소진 시점과 구매 타이밍을 계속 추적 중이에요
+          먼저 제품을 등록해보세요
         </p>
       </section>
 
@@ -791,6 +791,7 @@
         class="card popular-products-section hidden"
         aria-label="인기 제품"
         aria-hidden="true"
+        hidden
       >
         <div class="popular-products-header">
           <div>
