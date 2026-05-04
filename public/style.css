@@ -1027,6 +1027,14 @@ body.service-mode .routine-progress {
   grid-column: span 3;
 }
 
+.product-form-field--count {
+  grid-column: span 3;
+}
+
+.product-tracking-mode-group {
+  grid-column: 1 / -1;
+}
+
 .product-start-type-group {
   grid-column: 1 / -1;
   display: grid;
@@ -4744,6 +4752,21 @@ body.service-mode .primary-app-sections--home-mode #monthlyUsageSummaryCard {
   line-height: 1.35;
 }
 
+.product-category-notice,
+.product-setup-notice {
+  border: 1px solid #e8d7c6;
+  border-radius: 10px;
+  background: #fffaf5;
+  color: #715647;
+  font-weight: 800;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.product-category-notice {
+  padding: 8px 10px;
+}
+
 .usage-input-error {
   margin: 6px 0 0;
   font-size: 11px;
@@ -5813,6 +5836,14 @@ body.service-mode .primary-app-sections--home-mode #monthlyUsageSummaryCard {
   font-size: 11px;
   font-weight: 900;
   line-height: 1.4;
+}
+
+.product-setup-notice {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 9px 10px;
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .product-setup-editor-actions {
@@ -7169,11 +7200,14 @@ body.service-mode .primary-app-sections--home-mode #monthlyUsageSummaryCard {
 }
 
 .product-depletion-primary {
+  min-width: 0;
   margin-top: 0;
   font-size: 10px;
   font-weight: 800;
   line-height: 1.35;
   color: #756680;
+  word-break: keep-all;
+  overflow-wrap: normal;
   transition: color 180ms ease, text-shadow 180ms ease;
 }
 
@@ -7182,6 +7216,8 @@ body.service-mode .primary-app-sections--home-mode #monthlyUsageSummaryCard {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 6px 10px;
+  width: 100%;
+  min-width: 0;
   margin-top: 0;
   padding: 9px 10px;
   border-radius: 12px;
@@ -7198,20 +7234,26 @@ body.service-mode .primary-app-sections--home-mode #monthlyUsageSummaryCard {
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
+  width: 100%;
 }
 
 .product-progress-block .progress-track {
   grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
   height: 13px;
 }
 
 .product-progress-label {
   min-width: 0;
+  width: 100%;
   color: #6f607d;
   font-size: 10px;
   font-weight: 800;
   line-height: 1.35;
-  overflow-wrap: anywhere;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: normal;
 }
 
 .product-progress-percent {
@@ -7288,6 +7330,7 @@ body.service-mode .primary-app-sections--home-mode #monthlyUsageSummaryCard {
   justify-content: flex-end;
   gap: 3px 6px;
   margin-top: 0;
+  min-width: 0;
   max-width: 220px;
   text-align: right;
 }
@@ -7333,10 +7376,14 @@ body.service-mode .primary-app-sections--home-mode #monthlyUsageSummaryCard {
 }
 
 .product-depletion-date {
+  flex-basis: 100%;
+  min-width: 0;
   margin-top: 2px;
   font-size: 9px;
   line-height: 1.45;
   color: #94879c;
+  word-break: keep-all;
+  overflow-wrap: normal;
   transition: color 180ms ease, text-shadow 180ms ease;
 }
 
@@ -7347,6 +7394,7 @@ body.service-mode .primary-app-sections--home-mode #monthlyUsageSummaryCard {
 
 .progress-track {
   width: 100%;
+  min-width: 0;
   height: 16px;
   margin-top: 0;
   border-radius: 999px;
@@ -8628,13 +8676,45 @@ body.service-mode .primary-app-sections--home-mode #monthlyUsageSummaryCard {
     flex-direction: row;
     justify-content: flex-start;
     gap: 6px 8px;
+    width: 100%;
+    min-width: 0;
     max-width: none;
     text-align: left;
   }
 
   .product-progress-block {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
     padding: 9px 10px;
+    width: 100%;
+    min-width: 0;
+    overflow: visible;
+  }
+
+  .product-progress-label {
+    width: 100%;
+    min-width: 0;
+    white-space: normal;
+    word-break: keep-all;
+    overflow-wrap: normal;
+  }
+
+  .product-progress-percent {
+    flex-shrink: 0;
+  }
+
+  .product-depletion-primary {
+    min-width: 0;
+  }
+
+  .product-depletion-date {
+    flex-basis: 100%;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .product-progress-block .progress-track {
+    width: 100%;
+    min-width: 0;
   }
 
   .product-dday-chip--list {

@@ -42,7 +42,7 @@
   <header class="nav">
     <div class="nav-title">
       <h1>Skinin</h1>
-      <p>대략 기록해도 구매 타이밍을 알려드려요</p>
+      <p>안 보이는 잔량과 소진 시점을 대략 알려드려요</p>
     </div>
     <div class="view-switch" aria-label="화면 전환">
       <button id="showHomeBtn" class="view-switch-btn view-switch-btn--active" type="button">홈</button>
@@ -63,7 +63,7 @@
       <h3 id="onboardingTitle">사용법</h3>
       <section class="onboarding-section">
         <p class="onboarding-intro">
-          정확하지 않아도 괜찮아요. 대략 기록하면 소진 시점과 구매 타이밍을 예측해드려요.
+          튜브형 크림, 펌프형 에센스, 선크림처럼 남은 양이 잘 안 보이는 제품도 대략 기록할 수 있어요.
         </p>
       </section>
 
@@ -98,7 +98,7 @@
       </section>
       <div class="modal-actions">
         <button id="closeOnboardingBtn" class="btn-secondary" type="button">닫기</button>
-        <button id="startOnboardingBtn">시작하기</button>
+        <button id="startOnboardingBtn">간단히 입력하고 시작하기</button>
       </div>
     </div>
   </div>
@@ -181,12 +181,12 @@
     <section id="emptyLandingScreen" class="hero-section empty-landing" aria-label="서비스 소개">
       <div class="empty-landing-shell">
         <div class="empty-landing-copy">
-          <h2>화장품, 떨어지고 나서<br />급하게 사지 마세요</h2>
-          <p>대략 기록해도 소진 시점을 예측해드려요.<br />정확하지 않아도 구매 타이밍을 놓치지 않게 도와드려요</p>
+          <h2>안 보이는 화장품 잔량,<br />언제 떨어질지 대략 알려드려요.</h2>
+          <p>튜브형 크림, 펌프형 에센스, 선크림처럼<br />남은 양이 잘 안 보이는 제품을 대략 기록해보세요.</p>
         </div>
 
         <div id="landingQuickProductEntry" class="usage-config-group product-form-field product-form-field--name" aria-label="빠른 제품 입력">
-          <p class="landing-input-flow">제품 이름만 입력하면 → 대략 기록 → 소진 시점 예측 → 구매 타이밍 안내</p>
+          <p class="landing-input-flow">제품 이름만 입력하면 대략 잔량 기록을 시작할 수 있어요</p>
           <label for="landingQuickProductName" class="field-label">빠른 제품 입력</label>
           <input
             id="landingQuickProductName"
@@ -194,16 +194,16 @@
             autocomplete="off"
             aria-describedby="landingQuickProductHelp"
           />
-          <p id="landingQuickProductHelp" class="usage-input-help">제품명을 적고 시작하면 등록 화면으로 이어집니다</p>
+          <p id="landingQuickProductHelp" class="usage-input-help">정확하지 않아도 괜찮아요. 나중에 언제든 수정할 수 있어요</p>
           <button id="landingPrimaryCta" class="landing-primary-cta" type="button">
-            입력하고 시작하기
+            간단히 입력하고 시작하기
           </button>
           <div id="demoLoginPrompt" class="demo-login-prompt hidden" aria-hidden="true">
-            <strong class="demo-login-prompt-value">먼저 체험해볼 수 있어요</strong>
-            <p>로그인하면 입력한 제품을 내 루틴에 저장할 수 있어요</p>
+            <strong class="demo-login-prompt-value">먼저 가볍게 써보세요</strong>
+            <p>로그인하면 입력한 제품을 내 루틴에 저장할 수 있어요.</p>
             <div class="demo-login-prompt-actions">
               <button id="demoPromptAnonLoginBtn" class="landing-start-btn landing-start-btn--anon" type="button">익명으로 시작</button>
-              <button id="demoPromptGoogleLoginBtn" class="landing-start-btn landing-start-btn--google" type="button">기록 저장하려면 Google 로그인</button>
+              <button id="demoPromptGoogleLoginBtn" class="landing-start-btn landing-start-btn--google" type="button">저장하려면 Google 로그인</button>
             </div>
           </div>
         </div>
@@ -243,7 +243,7 @@
 
         <div id="landingStartActions" class="landing-start-actions" aria-label="시작하기">
           <button id="anonLoginBtn" class="landing-start-btn landing-start-btn--anon" type="button">익명으로 시작</button>
-          <button id="googleLoginBtn" class="landing-start-btn landing-start-btn--google" type="button">기록 저장하려면 Google 로그인</button>
+          <button id="googleLoginBtn" class="landing-start-btn landing-start-btn--google" type="button">저장하려면 Google 로그인</button>
         </div>
 
         <div class="landing-secondary-actions">
@@ -379,7 +379,7 @@
           <div class="product-section-heading">
             <div>
               <h3>제품 추가</h3>
-              <p class="first-action-guide-text">정확하지 않아도 괜찮아요. 처음 1개만 대략 등록해도 홈에서 소진 시점을 볼 수 있어요</p>
+              <p class="first-action-guide-text">남은 양이 잘 안 보이는 튜브형/펌프형 제품도 대략 기록할 수 있어요</p>
             </div>
             <button
               id="productFormToggleBtn"
@@ -482,7 +482,7 @@
                     <button class="ml-preset-chip" type="button" data-ml-preset-target="quickAddTotalMl" data-ml-preset-value="100">100ml</button>
                     <button class="ml-preset-chip" type="button" data-ml-preset-target="quickAddTotalMl" data-ml-preset-value="150">150ml</button>
                   </div>
-                  <p id="quickAddTotalMlHelp" class="usage-input-help">잘 모르겠다면 추천값으로 시작해보세요. 쓰다 보면 언제든 조정할 수 있어요</p>
+                  <p id="quickAddTotalMlHelp" class="usage-input-help">잘 모르겠다면 100ml로 시작해도 괜찮아요.</p>
                   <p id="quickAddTotalMlError" class="usage-input-error hidden" aria-live="polite"></p>
                 </div>
                 <div id="quickAddCurrentMlGroup" class="usage-config-group usage-config-group--ml hidden" aria-hidden="true" hidden>
@@ -522,7 +522,7 @@
                     <button class="ml-preset-chip" type="button" data-ml-preset-target="quickAddPerUseMl" data-ml-preset-value="0.7">0.7ml</button>
                     <button class="ml-preset-chip" type="button" data-ml-preset-target="quickAddPerUseMl" data-ml-preset-value="1">1ml</button>
                   </div>
-                  <p id="quickAddPerUseMlHelp" class="usage-input-help">정확하지 않아도 괜찮아요. 평소 한 번 쓰는 양을 대략 선택해보세요</p>
+                  <p id="quickAddPerUseMlHelp" class="usage-input-help">정확하지 않아도 괜찮아요. 평소 한 번 쓰는 양을 대략 선택해보세요.</p>
                   <p id="quickAddPerUseMlError" class="usage-input-error hidden" aria-live="polite"></p>
                 </div>
                 <p id="quickAddHelp" class="usage-input-help">
@@ -544,6 +544,7 @@
                   aria-describedby="productNameHelp productNameError"
                 />
                 <p id="productNameHelp" class="usage-input-help">제품명만 입력해도 바로 추가할 수 있어요. 자세한 값은 나중에 언제든 수정할 수 있어요</p>
+                <p class="usage-input-help">남은 양이 잘 안 보이는 튜브형/펌프형 제품도 대략 기록할 수 있어요.</p>
                 <p id="productNameError" class="usage-input-error hidden" aria-live="polite"></p>
               </div>
               <fieldset id="productStartTypeGroup" class="product-start-type-group">
@@ -594,7 +595,7 @@
                 </div>
                 <div class="usage-config-group product-form-field product-form-field--category">
                   <label for="productCategory" class="field-label">카테고리</label>
-                  <select id="productCategory">
+                  <select id="productCategory" aria-describedby="pharmacyCategoryNotice">
                     <option value="기타" selected>기타</option>
                     <option value="토너">토너</option>
                     <option value="에센스">에센스</option>
@@ -602,10 +603,28 @@
                     <option value="로션">로션</option>
                     <option value="크림">크림</option>
                     <option value="선크림">선크림</option>
+                    <option value="연고/약국 제품">연고/약국 제품</option>
                     <option value="바디로션">바디로션</option>
                   </select>
-                  <p class="usage-input-help">선택하면 대략적인 추천 사용량을 채워드려요</p>
+                  <p class="usage-input-help">제품 종류에 따라 대략적인 사용량을 추천해드려요.</p>
+                  <p id="pharmacyCategoryNotice" class="usage-input-help product-category-notice hidden" aria-hidden="true" aria-live="polite">
+                    연고/약국 제품은 사용량 기록용이며, 사용법은 전문가 안내를 따라주세요.
+                  </p>
                 </div>
+                <fieldset id="productTrackingModeGroup" class="product-start-type-group product-tracking-mode-group">
+                  <legend class="field-label">기록 방식</legend>
+                  <div class="product-start-type-options">
+                    <label class="product-start-type-option">
+                      <input type="radio" name="productTrackingMode" value="volume" checked />
+                      <span>용량으로 기록</span>
+                    </label>
+                    <label class="product-start-type-option">
+                      <input type="radio" name="productTrackingMode" value="count" />
+                      <span>횟수로 기록</span>
+                    </label>
+                  </div>
+                  <p class="usage-input-help">ml를 잘 모르겠다면 앞으로 몇 번 더 쓸 수 있을지로 기록해보세요.</p>
+                </fieldset>
                 <div id="productTotalMlGroup" class="usage-config-group usage-config-group--ml product-form-field product-form-field--total">
                   <label for="productTotalMl" class="field-label">총 용량 (ml)</label>
                   <div class="usage-input-control">
@@ -626,7 +645,7 @@
                     <button class="ml-preset-chip" type="button" data-ml-preset-target="productTotalMl" data-ml-preset-value="100">100ml</button>
                     <button class="ml-preset-chip" type="button" data-ml-preset-target="productTotalMl" data-ml-preset-value="150">150ml</button>
                   </div>
-                  <p id="productTotalMlHelp" class="usage-input-help">잘 모르겠다면 추천값으로 시작해보세요. 쓰다 보면 언제든 조정할 수 있어요</p>
+                  <p id="productTotalMlHelp" class="usage-input-help">잘 모르겠다면 100ml로 시작해도 괜찮아요.</p>
                   <p id="productTotalMlError" class="usage-input-error hidden" aria-live="polite"></p>
                 </div>
                 <div id="productCurrentMlGroup" class="usage-config-group usage-config-group--ml product-form-field product-form-field--current hidden" aria-hidden="true" hidden>
@@ -666,18 +685,56 @@
                     <button class="ml-preset-chip" type="button" data-ml-preset-target="productPerUseMl" data-ml-preset-value="0.7">0.7ml</button>
                     <button class="ml-preset-chip" type="button" data-ml-preset-target="productPerUseMl" data-ml-preset-value="1">1ml</button>
                   </div>
-                  <p id="productPerUseMlHelp" class="usage-input-help">정확하지 않아도 괜찮아요. 평소 한 번 쓰는 양을 대략 선택해보세요</p>
+                  <p id="productPerUseMlHelp" class="usage-input-help">정확하지 않아도 괜찮아요. 평소 한 번 쓰는 양을 대략 선택해보세요.</p>
                   <p id="productPerUseMlError" class="usage-input-error hidden" aria-live="polite"></p>
                 </div>
+                <div id="productRemainingUsesGroup" class="usage-config-group product-form-field product-form-field--count hidden" aria-hidden="true" hidden>
+                  <label for="productRemainingUses" class="field-label">앞으로 몇 번 정도 쓸 수 있나요?</label>
+                  <input
+                    id="productRemainingUses"
+                    type="number"
+                    min="1"
+                    step="1"
+                    placeholder="예: 10 / 20 / 30"
+                    inputmode="numeric"
+                    aria-describedby="productRemainingUsesHelp productRemainingUsesError"
+                  />
+                  <div class="ml-preset-chip-group" aria-label="남은 사용 가능 횟수 빠른 선택">
+                    <button class="ml-preset-chip" type="button" data-ml-preset-target="productRemainingUses" data-ml-preset-value="10">10회</button>
+                    <button class="ml-preset-chip" type="button" data-ml-preset-target="productRemainingUses" data-ml-preset-value="20">20회</button>
+                    <button class="ml-preset-chip" type="button" data-ml-preset-target="productRemainingUses" data-ml-preset-value="30">30회</button>
+                    <button class="ml-preset-chip" type="button" data-ml-preset-target="productRemainingUses" data-ml-preset-value="50">50회</button>
+                  </div>
+                  <p id="productRemainingUsesHelp" class="usage-input-help">ml를 잘 모르겠다면 앞으로 몇 번 더 쓸 수 있을지로 기록해보세요.</p>
+                  <p id="productRemainingUsesError" class="usage-input-error hidden" aria-live="polite"></p>
+                </div>
+                <div id="productUsesPerDayGroup" class="usage-config-group product-form-field product-form-field--count hidden" aria-hidden="true" hidden>
+                  <label for="productUsesPerDay" class="field-label">하루에 몇 번 사용하나요?</label>
+                  <input
+                    id="productUsesPerDay"
+                    type="number"
+                    min="0.1"
+                    step="0.1"
+                    placeholder="예: 1 / 2"
+                    inputmode="decimal"
+                    aria-describedby="productUsesPerDayHelp productUsesPerDayError"
+                  />
+                  <div class="ml-preset-chip-group" aria-label="하루 사용 횟수 빠른 선택">
+                    <button class="ml-preset-chip" type="button" data-ml-preset-target="productUsesPerDay" data-ml-preset-value="1">1회</button>
+                    <button class="ml-preset-chip" type="button" data-ml-preset-target="productUsesPerDay" data-ml-preset-value="2">2회</button>
+                  </div>
+                  <p id="productUsesPerDayHelp" class="usage-input-help">하루 평균 사용 횟수를 대략 입력해주세요.</p>
+                  <p id="productUsesPerDayError" class="usage-input-error hidden" aria-live="polite"></p>
+                </div>
                 <div class="usage-config-group product-form-field product-form-field--routine">
-                  <label for="productRoutine" class="field-label">사용 루틴</label>
+                  <label id="productRoutineLabel" for="productRoutine" class="field-label">사용 루틴</label>
                   <select id="productRoutine">
-                    <option value="morning">아침</option>
-                    <option value="night">저녁</option>
-                    <option value="twice_daily">하루 2회</option>
-                    <option value="flexible">자유 사용</option>
+                    <option value="morning" data-volume-label="아침" data-count-label="아침">아침</option>
+                    <option value="night" data-volume-label="저녁" data-count-label="저녁">저녁</option>
+                    <option value="twice_daily" data-volume-label="하루 2회" data-count-label="아침+저녁">하루 2회</option>
+                    <option value="flexible" data-volume-label="자유 사용" data-count-label="필요할 때">자유 사용</option>
                   </select>
-                  <p class="usage-input-help">언제 쓰는 제품인지 선택해주세요</p>
+                  <p id="productRoutineHelp" class="usage-input-help">언제 쓰는 제품인지 선택해주세요</p>
                 </div>
                 <div id="productUsageFrequencyPerDayGroup" class="usage-config-group usage-config-group--frequency product-form-field product-form-field--frequency hidden" aria-hidden="true" hidden>
                   <label for="productUsageFrequencyPerDay" class="field-label">하루 사용 횟수</label>

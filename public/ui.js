@@ -84,6 +84,7 @@
       로션: "로션은 보통 1~2ml 사용해요",
       크림: "크림은 보통 0.5~1ml 사용해요",
       선크림: "선크림은 보통 1ml 정도 사용해요",
+      "연고/약국 제품": "연고/약국 제품은 평소 한 번 쓰는 양을 대략 입력해보세요",
       바디로션: "바디로션은 보통 3~5ml 사용해요"
     };
     const CATEGORY_DEFAULT_PER_USE_ML = {
@@ -93,6 +94,7 @@
       로션: 1.5,
       크림: 0.7,
       선크림: 1,
+      "연고/약국 제품": 0.7,
       바디로션: 4
     };
     const FIRST_ACTION_GUIDE_SEEN_STORAGE_KEY = "cosmeticTrackerFirstActionGuideSeen";
@@ -257,6 +259,7 @@
     let monthlyUsageEvents = [];
     let pendingRoutineType = null;
     let hasManualPerUseMlInput = false;
+    let hasManualTrackingModeInput = false;
     let openedPurchaseMenuProductId = null;
     let openedPurchaseMenuSection = "";
     let pendingPurchaseMenuFocusTarget = null;
@@ -449,6 +452,14 @@
       return "자유 사용";
     }
 
+    function getCountTimeSlotDisplayLabel(routine) {
+      const normalized = normalizeRoutineValue(routine);
+      if (normalized === "morning") return "아침";
+      if (normalized === "night") return "저녁";
+      if (normalized === "twice_daily") return "아침+저녁";
+      return "필요할 때";
+    }
+
     function normalizeUsageFrequencyPerDay(value, fallback = 1) {
       const numeric = Number(value);
       if (!Number.isFinite(numeric) || numeric <= 0) return fallback;
@@ -636,6 +647,33 @@
       return fallback || "기타";
     }
 
+    function normalizeProductCategoryValue(category) {
+      const value = String(category || "").trim();
+      if (value === "크림/연고") return "크림";
+      if (value === "약국/처방 제품") return "연고/약국 제품";
+      return value || "기타";
+    }
+
+    function normalizeTrackingMode(value) {
+      return value === "count" ? "count" : "volume";
+    }
+
+    function isCountTrackingProduct(product) {
+      return normalizeTrackingMode(product?.trackingMode) === "count";
+    }
+
+    function normalizeCountValue(value, fallback = null) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric) || numeric <= 0) return fallback;
+      return Math.ceil(numeric);
+    }
+
+    function normalizeUsesPerDayValue(value, fallback = null) {
+      const numeric = Number(value);
+      if (!Number.isFinite(numeric) || numeric <= 0) return fallback;
+      return Number(numeric.toFixed(2));
+    }
+
     function hasPositiveSetupNumber(value) {
       const numeric = Number(value);
       return Number.isFinite(numeric) && numeric > 0;
@@ -691,6 +729,7 @@
       });
       const purchaseLinks = mergePurchaseLinks(raw.purchaseLinks, raw.buyLinks);
       const needsSetup = shouldProductNeedSetup(raw);
+      const trackingMode = normalizeTrackingMode(raw.trackingMode);
 
       return {
         ...raw,
@@ -702,6 +741,10 @@
         remainingPct,
         remainingPercent: remainingPct,
         usageStepPercent: normalizeUsageStepPercent(raw.usageStepPercent),
+        category: normalizeProductCategoryValue(raw.category),
+        trackingMode,
+        remainingUses: trackingMode === "count" ? normalizeCountValue(raw.remainingUses, null) : null,
+        usesPerDay: trackingMode === "count" ? normalizeUsesPerDayValue(raw.usesPerDay, null) : null,
         routine,
         usageFrequencyPerDay,
         needsSetup,
@@ -796,6 +839,8 @@
         "productTotalMl",
         "productCurrentMl",
         "productPerUseMl",
+        "productRemainingUses",
+        "productUsesPerDay",
         "productRoutine",
         "productUsageFrequencyPerDay",
         "quickProductNames",
@@ -814,6 +859,9 @@
       });
 
       document.querySelectorAll('input[name="productStartType"], input[name="quickProductStartType"]').forEach((inputEl) => {
+        unlockProductCreationControl(inputEl);
+      });
+      document.querySelectorAll('input[name="productTrackingMode"]').forEach((inputEl) => {
         unlockProductCreationControl(inputEl);
       });
 
@@ -1507,6 +1555,7 @@
       historyUsageEvents = [];
       pendingRoutineType = null;
       hasManualPerUseMlInput = false;
+      hasManualTrackingModeInput = false;
       openedPurchaseMenuProductId = null;
       openedPurchaseMenuSection = "";
       pendingPurchaseMenuFocusTarget = null;
@@ -1577,12 +1626,15 @@
       document.getElementById("productTotalMl").value = "";
       document.getElementById("productCurrentMl").value = "";
       document.getElementById("productPerUseMl").value = "";
+      document.getElementById("productRemainingUses").value = "";
+      document.getElementById("productUsesPerDay").value = "";
       document.getElementById("productRoutine").value = "morning";
       document.getElementById("productUsageFrequencyPerDay").value = "";
       const quickProductNamesEl = document.getElementById("quickProductNames");
       if (quickProductNamesEl) quickProductNamesEl.value = "";
       clearProductMlValidationErrors();
       resetProductFormTouchedFields();
+      setProductTrackingMode("volume");
       updateAllMlPresetSelections();
       setProductStartType("new");
       setProductAddMode("single");
@@ -2061,10 +2113,13 @@
         groupEl.hidden = !isUsedProduct;
         groupEl.setAttribute("aria-hidden", isUsedProduct ? "false" : "true");
       }
+      if (getProductTrackingMode() === "count") {
+        updateProductTrackingModeFieldVisibility();
+      }
       if (totalMlHelpEl) {
         totalMlHelpEl.textContent = isUsedProduct
           ? "사용 중인 제품의 처음 총 용량을 대략 입력해주세요"
-          : "잘 모르겠다면 100ml로 시작해도 괜찮아요";
+          : "잘 모르겠다면 100ml로 시작해도 괜찮아요.";
       }
       if (!isUsedProduct) {
         setProductInputError("quickAddCurrentMl", "");
@@ -2537,6 +2592,16 @@
 
     function hasCalculatedDepletionDate(product) {
       if (!product || isSampleProduct(product)) return false;
+      if (isCountTrackingProduct(product)) {
+        const remainingUses = normalizeCountValue(product.remainingUses, 0);
+        const usesPerDay = normalizeUsesPerDayValue(product.usesPerDay, 0);
+        const daysLeft = calculateDaysLeft(product);
+        return Number.isFinite(remainingUses)
+          && Number.isFinite(usesPerDay)
+          && usesPerDay > 0
+          && Number.isFinite(daysLeft)
+          && daysLeft >= 0;
+      }
       const remainingMl = calculateRemainingMl(product);
       const perUseMl = Number(product?.perUseMl);
       const dailyFrequency = getRoutineDailyFrequency(product?.routine, product?.usageFrequencyPerDay);
@@ -2548,6 +2613,14 @@
         && dailyUsageMl > 0
         && Number.isFinite(daysLeft)
         && daysLeft >= 0;
+    }
+
+    function hasProductRemaining(product) {
+      if (!product) return false;
+      if (isCountTrackingProduct(product)) {
+        return normalizeCountValue(product.remainingUses, 0) > 0;
+      }
+      return calculateRemainingMl(product) > 0;
     }
 
     function hasVisiblePurchaseCtaProduct(product) {
@@ -3345,8 +3418,8 @@
             <strong class="product-detail-stat-value">${formatMlValue(perUseMl)}ml</strong>
           </div>
           <div class="product-detail-stat">
-            <span class="product-detail-stat-label">사용 루틴</span>
-            <strong class="product-detail-stat-value">${getRoutineDisplayLabel(product.routine)}</strong>
+            <span class="product-detail-stat-label">${isCountTrackingProduct(product) ? "사용 시간대" : "사용 루틴"}</span>
+            <strong class="product-detail-stat-value">${isCountTrackingProduct(product) ? getCountTimeSlotDisplayLabel(product.routine) : getRoutineDisplayLabel(product.routine)}</strong>
           </div>
           <div class="product-detail-stat">
             <span class="product-detail-stat-label">하루 사용 횟수</span>
@@ -4257,6 +4330,15 @@
     }
 
     function calculateDaysLeft(product) {
+      if (isCountTrackingProduct(product)) {
+        const remainingUses = normalizeCountValue(product?.remainingUses, 0);
+        const usesPerDay = normalizeUsesPerDayValue(product?.usesPerDay, 0);
+        if (!Number.isFinite(remainingUses) || !Number.isFinite(usesPerDay) || usesPerDay <= 0) {
+          return 0;
+        }
+        return Math.max(0, Math.ceil(remainingUses / usesPerDay));
+      }
+
       const remainingMl = calculateRemainingMl(product);
       const perUseMl = Number(product?.perUseMl);
       const dailyFrequency = getRoutineDailyFrequency(product?.routine, product?.usageFrequencyPerDay);
@@ -4444,6 +4526,9 @@
       const remainingMl = !isDemo && source
         ? calculateRemainingMl(source)
         : NaN;
+      const remainingUses = !isDemo && isCountTrackingProduct(source)
+        ? normalizeCountValue(source.remainingUses, 0)
+        : NaN;
       const action = isDemo
         ? {
             label: "",
@@ -4468,7 +4553,9 @@
         remainingText: getSoonDepletionRemainingText(daysLeft),
         remainingAmountText: isDemo
           ? "남은량 자동 계산"
-          : (Number.isFinite(remainingMl) ? `남은량 ${formatMlValue(remainingMl)}ml` : ""),
+          : (Number.isFinite(remainingUses)
+            ? `약 ${remainingUses}회 남음`
+            : (Number.isFinite(remainingMl) ? `남은량 ${formatMlValue(remainingMl)}ml` : "")),
         urgencyMessage: isDemo
           ? String(source?.summary || "")
           : getSoonDepletionUrgencyMessage(daysLeft),
@@ -4726,6 +4813,7 @@
         { value: "로션", label: "로션" },
         { value: "크림", label: "크림" },
         { value: "선크림", label: "선크림" },
+        { value: "연고/약국 제품", label: "연고/약국 제품" },
         { value: "바디로션", label: "바디로션" }
       ];
       const routineOptions = [
@@ -4734,8 +4822,9 @@
         { value: "twice_daily", label: "하루 2회" },
         { value: "flexible", label: "자유 사용" }
       ];
-      const category = product.category || "기타";
+      const category = normalizeProductCategoryValue(product.category);
       const routine = normalizeRoutineValue(product.routine);
+      const isCountMode = isCountTrackingProduct(product);
       const totalMl = Number.isFinite(Number(product.totalMl)) && Number(product.totalMl) > 0
         ? Number(product.totalMl)
         : DEFAULT_TOTAL_ML;
@@ -4780,10 +4869,18 @@
                 ${getProductSetupOptionsMarkup(categoryOptions, category)}
               </select>
             </label>
+            <p class="product-setup-notice ${category === "연고/약국 제품" ? "" : "hidden"}" data-role="setupPharmacyNotice" aria-hidden="${category === "연고/약국 제품" ? "false" : "true"}">
+              연고/약국 제품은 사용량 기록용이며, 사용법은 전문가 안내를 따라주세요.
+            </p>
             <label class="product-setup-field">
-              <span>사용 루틴</span>
+              <span>${isCountMode ? "사용 시간대" : "사용 루틴"}</span>
               <select class="product-setup-input" data-setup-field="routine" data-product-id="${productId}">
-                ${getProductSetupOptionsMarkup(routineOptions, routine)}
+                ${getProductSetupOptionsMarkup(isCountMode
+                  ? routineOptions.map((option) => ({
+                    value: option.value,
+                    label: getCountTimeSlotDisplayLabel(option.value)
+                  }))
+                  : routineOptions, routine)}
               </select>
             </label>
             <label class="product-setup-field">
@@ -4897,6 +4994,11 @@
 
       const titleProductName = getProductIdentityValue(product, "productDisplayName") || product.name || "제품";
       const name = product.brand ? `${titleProductName} (${product.brand})` : titleProductName;
+      const isCountMode = isCountTrackingProduct(product);
+      const countUsesPerDay = normalizeUsesPerDayValue(product.usesPerDay, null);
+      const metaText = isCountMode
+        ? `${product.category || "기타"} · 하루 ${formatMlValue(countUsesPerDay || 1)}회 · ${getCountTimeSlotDisplayLabel(product.routine)}`
+        : `${product.category || "기타"} · ${getRoutineDisplayLabel(product.routine)}`;
       const routineToggleMarkup = options.showRoutineToggle ? `
         <label class="routine-product-check">
           <input
@@ -4933,7 +5035,7 @@
                 <strong>${name}</strong>
                 <span class="low-stock-badge hidden" data-role="depletionBadge"></span>
               </div>
-              <div class="meta">${product.category || "기타"} · ${getRoutineDisplayLabel(product.routine)}</div>
+              <div class="meta">${metaText}</div>
             </div>
             <span class="product-dday-chip product-dday-chip--list" data-role="depletionDday"></span>
           </div>
@@ -4961,9 +5063,9 @@
           <div class="product-progress-block" aria-label="잔량 및 소진 예측">
             <div class="product-progress-header">
               <span class="product-progress-label" data-role="remainingText"></span>
-              <strong class="product-progress-percent" data-role="remainingPercentText"></strong>
             </div>
             <div class="product-result-summary" aria-label="예상 소진 결과">
+              <strong class="product-progress-percent" data-role="remainingPercentText"></strong>
               <span class="product-depletion-primary" data-role="depletionPrimary"></span>
               <span class="product-depletion-date" data-role="depletionDate"></span>
             </div>
@@ -5067,12 +5169,16 @@
 
       const shouldShowCreationGuide = recentProductCreationGuide?.productId === product.id;
       const shouldHighlightRecentUse = recentlyUsedProductId === product.id;
-      const percent = calculateRemainingPercent(product);
+      const isCountMode = isCountTrackingProduct(product);
+      const remainingUses = normalizeCountValue(product.remainingUses, 0);
+      const usesPerDay = normalizeUsesPerDayValue(product.usesPerDay, 0);
+      const percent = isCountMode ? Number.NaN : calculateRemainingPercent(product);
       const remainingPercent = Math.round(percent);
       const totalMl = Number.isFinite(Number(product.totalMl)) && Number(product.totalMl) > 0
         ? Number(product.totalMl)
         : 0;
       const remainingMl = calculateRemainingMl(product);
+      const hasRemaining = isCountMode ? remainingUses > 0 : remainingMl > 0;
       const daysLeft = calculateDaysLeft(product);
       const displayDaysLeft = getDisplayDaysLeft(daysLeft);
       const estimatedDepletionDate = formatEstimatedDepletionDate(daysLeft);
@@ -5081,12 +5187,12 @@
         || isSample
         || pendingUsageProductIds.has(product.id)
         || isUsageActionLocked(product.id, getUsageActionKey())
-        || remainingMl <= 0;
+        || !hasRemaining;
       const routineButtonDisabled = !currentUser
         || isSample
         || Boolean(pendingRoutineType)
         || pendingUsageProductIds.has(product.id)
-        || remainingMl <= 0;
+        || !hasRemaining;
       const remainingStockState = getRemainingStockState(percent);
       const purchaseCtaState = getProductPurchaseCtaState(percent, daysLeft);
       const showPurchaseRecommendation = purchaseCtaState.showButton;
@@ -5101,7 +5207,7 @@
       const needsSetup = isProductSetupIncomplete(product);
       const isSetupEditorOpen = openProductSetupEditorId === product.id;
       const isIdentityEditorOpen = openProductIdentityEditorId === product.id;
-      const isDangerRemaining = remainingPercent < 30;
+      const isDangerRemaining = isCountMode ? displayDaysLeft <= PURCHASE_URGENT_DAYS_THRESHOLD : remainingPercent < 30;
       const productDisplayName = product.brand ? `${product.name} (${product.brand})` : (product.name || "제품");
 
       row.className = [
@@ -5153,13 +5259,17 @@
       const isSafePurchaseState = purchaseCtaState.status === "safe";
 
       if (remainingTextEl) {
-        remainingTextEl.textContent = totalMl > 0
-          ? `잔량 ${formatMlValue(remainingMl)}ml / ${formatMlValue(totalMl)}ml`
-          : `잔량 ${formatMlValue(remainingMl)}ml`;
+        if (isCountMode) {
+          remainingTextEl.textContent = `약 ${remainingUses}회 남음 · 하루 ${formatMlValue(usesPerDay || 1)}회 기준`;
+        } else {
+          remainingTextEl.textContent = totalMl > 0
+            ? `잔량 ${formatMlValue(remainingMl)}ml / ${formatMlValue(totalMl)}ml`
+            : `잔량 ${formatMlValue(remainingMl)}ml`;
+        }
       }
       if (percentTextEl) {
-        percentTextEl.textContent = `${remainingPercent}%`;
-        setProgressToneClasses({ textEl: percentTextEl, percent: remainingPercent });
+        percentTextEl.textContent = isCountMode ? "횟수 기준" : `${remainingPercent}%`;
+        setProgressToneClasses({ textEl: percentTextEl, percent: isCountMode ? 100 : remainingPercent });
       }
       if (todayRoutineStatusEl) {
         todayRoutineStatusEl.innerHTML = `
@@ -5218,7 +5328,7 @@
           && !pendingUsageProductIds.has(product.id)
           && !isCompletedToday
           && !isLocked
-          && remainingMl > 0
+          && hasRemaining
         );
         routineToggleEl.disabled = !canSelectForRoutine;
         routineToggleEl.checked = canSelectForRoutine;
@@ -5396,11 +5506,15 @@
       });
 
       if (progressTrackEl) {
+        progressTrackEl.classList.toggle("hidden", isCountMode);
+        progressTrackEl.setAttribute("aria-hidden", isCountMode ? "true" : "false");
         progressTrackEl.classList.toggle("progress-track--routine-updated", isRoutineFeedbackActive);
         progressTrackEl.setAttribute("aria-valuenow", String(remainingPercent));
       }
 
-      applyProgressBar(progressTrackEl, remainingPercent);
+      if (!isCountMode) {
+        applyProgressBar(progressTrackEl, remainingPercent);
+      }
     }
 
     function updateProductRowById(productId) {
@@ -5614,7 +5728,7 @@
         };
       }
 
-      const actionableProducts = products.filter((product) => !isSampleProduct(product) && calculateRemainingMl(product) > 0);
+      const actionableProducts = products.filter((product) => !isSampleProduct(product) && hasProductRemaining(product));
       const total = actionableProducts.length;
       const completed = actionableProducts.filter((product) => usageState[groupId]?.has(product.id)).length;
       const pending = Math.max(0, total - completed);
@@ -6143,14 +6257,20 @@
     function updateCategoryUsageRecommendation(options = {}) {
       const categoryEl = document.getElementById("productCategory");
       const recommendationEl = document.getElementById("usageRecommendation");
+      const pharmacyNoticeEl = document.getElementById("pharmacyCategoryNotice");
       const perUseMlEl = document.getElementById("productPerUseMl");
       if (!categoryEl || !recommendationEl) return;
 
       const shouldAutofillPerUse = options.shouldAutofillPerUse !== false;
-      const category = categoryEl.value;
+      const category = normalizeProductCategoryValue(categoryEl.value);
+      const isPharmacyCategory = category === "연고/약국 제품";
       const recommendation = CATEGORY_USAGE_RECOMMENDATIONS[category];
+      if (pharmacyNoticeEl) {
+        pharmacyNoticeEl.classList.toggle("hidden", !isPharmacyCategory);
+        pharmacyNoticeEl.setAttribute("aria-hidden", isPharmacyCategory ? "false" : "true");
+      }
       if (!recommendation) {
-        recommendationEl.textContent = "카테고리에 맞게 평소 한 번 쓰는 양을 대략 선택해보세요.";
+        recommendationEl.textContent = "제품 종류에 따라 대략적인 사용량을 추천해드려요.";
       } else {
         recommendationEl.textContent = recommendation;
       }
@@ -6161,6 +6281,10 @@
       if (shouldAutofillPerUse && Number.isFinite(suggestedDefault) && (isInputEmpty || !hasManualPerUseMlInput)) {
         perUseMlEl.value = formatMlValue(suggestedDefault);
         hasManualPerUseMlInput = false;
+      }
+
+      if (!hasManualTrackingModeInput) {
+        setProductTrackingMode(isPharmacyCategory ? "count" : "volume");
       }
 
       updateMlPresetSelection("productPerUseMl");
@@ -7579,12 +7703,11 @@
       document.querySelectorAll(".use-product-btn").forEach((btn) => {
         const productId = btn.getAttribute("data-product-id");
         const product = activeProducts.find((item) => item.id === productId);
-        const remainingMl = product ? calculateRemainingMl(product) : 0;
         btn.disabled = !canWrite
           || isSampleProduct(product)
           || pendingUsageProductIds.has(productId)
           || isUsageActionLocked(productId, getUsageActionKey())
-          || remainingMl <= 0;
+          || !hasProductRemaining(product);
       });
 
       document.querySelectorAll(".routine-select").forEach((selectEl) => {
@@ -7620,13 +7743,12 @@
           || pendingUsageProductIds.has(productId)
           || isCompletedToday
           || isUsageActionLocked(productId, getUsageActionKey(routineType))
-          || calculateRemainingMl(product) <= 0;
+          || !hasProductRemaining(product);
       });
       const todayUsageState = buildTodayRoutineUsageState(recentUsageEvents);
       document.querySelectorAll(".product-routine-use-btn").forEach((btn) => {
         const productId = btn.getAttribute("data-product-id");
         const product = activeProducts.find((item) => item.id === productId);
-        const remainingMl = product ? calculateRemainingMl(product) : 0;
         const sessionType = btn.getAttribute("data-routine-session");
         const isCompletedToday = Boolean(sessionType && todayUsageState[sessionType]?.has(productId));
         btn.disabled = !canWrite
@@ -7635,20 +7757,20 @@
           || pendingUsageProductIds.has(productId)
           || isCompletedToday
           || isUsageActionLocked(productId, getUsageActionKey(sessionType))
-          || remainingMl <= 0;
+          || !hasProductRemaining(product);
       });
 
       const hasMorningRoutineTargets = activeProducts.some((product) => {
         return !isSampleProduct(product)
           && isProductInRoutine(product, "morning")
           && !todayUsageState.morning?.has(product.id)
-          && calculateRemainingMl(product) > 0;
+          && hasProductRemaining(product);
       });
       const hasEveningRoutineTargets = activeProducts.some((product) => {
         return !isSampleProduct(product)
           && isProductInRoutine(product, "evening")
           && !todayUsageState.evening?.has(product.id)
-          && calculateRemainingMl(product) > 0;
+          && hasProductRemaining(product);
       });
 
       const morningBtn = document.getElementById("completeMorningRoutineBtn");
@@ -7686,8 +7808,8 @@
     }
 
     function promptLoginForDemoProductSave() {
-      showAuthMessage("먼저 체험해볼 수 있어요");
-      showToast("먼저 체험해볼 수 있어요", "로그인하면 입력한 제품을 내 루틴에 저장할 수 있어요.", 2600, {
+      showAuthMessage("먼저 가볍게 써보세요");
+      showToast("먼저 가볍게 써보세요", "로그인하면 입력한 제품을 내 루틴에 저장할 수 있어요.", 2600, {
         placement: "top"
       });
     }
@@ -7811,6 +7933,8 @@
       setProductInputError("productTotalMl", "");
       setProductInputError("productCurrentMl", "");
       setProductInputError("productPerUseMl", "");
+      setProductInputError("productRemainingUses", "");
+      setProductInputError("productUsesPerDay", "");
       setProductInputError("productUsageFrequencyPerDay", "");
     }
 
@@ -7834,7 +7958,14 @@
     }
 
     function updateAllMlPresetSelections() {
-      ["quickAddTotalMl", "quickAddPerUseMl", "productTotalMl", "productPerUseMl"].forEach(updateMlPresetSelection);
+      [
+        "quickAddTotalMl",
+        "quickAddPerUseMl",
+        "productTotalMl",
+        "productPerUseMl",
+        "productRemainingUses",
+        "productUsesPerDay"
+      ].forEach(updateMlPresetSelection);
     }
 
     function handleMlPresetChipClick(event) {
@@ -7850,7 +7981,12 @@
       if (!inputEl || presetValue === null || inputEl.disabled) return;
 
       inputEl.value = presetValue;
-      if (targetId === "productTotalMl" || targetId === "productPerUseMl") {
+      if (
+        targetId === "productTotalMl"
+        || targetId === "productPerUseMl"
+        || targetId === "productRemainingUses"
+        || targetId === "productUsesPerDay"
+      ) {
         markProductFormFieldTouched(targetId);
       }
       if (targetId === "productPerUseMl") {
@@ -7879,7 +8015,7 @@
       if (totalMlHelpEl) {
         totalMlHelpEl.textContent = isUsedProduct
           ? "사용 중인 제품의 처음 총 용량을 대략 입력해주세요"
-          : "잘 모르겠다면 100ml로 시작해도 괜찮아요";
+          : "잘 모르겠다면 100ml로 시작해도 괜찮아요.";
       }
       if (!isUsedProduct) {
         setProductInputError("productCurrentMl", "");
@@ -7951,7 +8087,7 @@
       const inputEl = document.getElementById("productUsageFrequencyPerDay");
       if (!routineEl || !groupEl || !inputEl) return;
 
-      const isFlexible = normalizeRoutineValue(routineEl.value) === "flexible";
+      const isFlexible = normalizeRoutineValue(routineEl.value) === "flexible" && getProductTrackingMode() === "volume";
       groupEl.classList.toggle("hidden", !isFlexible);
       groupEl.hidden = !isFlexible;
       groupEl.setAttribute("aria-hidden", isFlexible ? "false" : "true");
@@ -7964,22 +8100,137 @@
       }
     }
 
+    function getProductTrackingMode() {
+      const checkedEl = document.querySelector('input[name="productTrackingMode"]:checked');
+      return normalizeTrackingMode(checkedEl?.value);
+    }
+
+    function setProductTrackingMode(mode, options = {}) {
+      const nextMode = normalizeTrackingMode(mode);
+      document.querySelectorAll('input[name="productTrackingMode"]').forEach((radioEl) => {
+        radioEl.checked = radioEl.value === nextMode;
+      });
+      if (options.manual === true) {
+        hasManualTrackingModeInput = true;
+      }
+      updateProductTrackingModeFieldVisibility();
+      refreshProductMlValidationPreview();
+    }
+
+    function updateProductTrackingModeFieldVisibility() {
+      const isCountMode = getProductTrackingMode() === "count";
+      const volumeGroupIds = [
+        "productTotalMlGroup",
+        "productCurrentMlGroup",
+        "productPerUseMlGroup"
+      ];
+      const countGroupIds = [
+        "productRemainingUsesGroup",
+        "productUsesPerDayGroup"
+      ];
+
+      volumeGroupIds.forEach((id) => {
+        const groupEl = document.getElementById(id);
+        if (!groupEl) return;
+        const shouldHide = isCountMode || (id === "productCurrentMlGroup" && getProductStartType() !== "used");
+        groupEl.classList.toggle("hidden", shouldHide);
+        groupEl.hidden = shouldHide;
+        groupEl.setAttribute("aria-hidden", shouldHide ? "true" : "false");
+      });
+
+      countGroupIds.forEach((id) => {
+        const groupEl = document.getElementById(id);
+        if (!groupEl) return;
+        groupEl.classList.toggle("hidden", !isCountMode);
+        groupEl.hidden = !isCountMode;
+        groupEl.setAttribute("aria-hidden", isCountMode ? "false" : "true");
+      });
+
+      updateProductRoutineModeCopy(isCountMode);
+
+      if (isCountMode) {
+        setProductInputError("productTotalMl", "");
+        setProductInputError("productCurrentMl", "");
+        setProductInputError("productPerUseMl", "");
+        setProductInputError("productUsageFrequencyPerDay", "");
+      } else {
+        setProductInputError("productRemainingUses", "");
+        setProductInputError("productUsesPerDay", "");
+        updateProductCurrentMlFieldVisibility();
+      }
+      updateRoutineFrequencyFieldVisibility();
+    }
+
+    function updateProductRoutineModeCopy(isCountMode = getProductTrackingMode() === "count") {
+      const routineLabelEl = document.getElementById("productRoutineLabel");
+      const routineHelpEl = document.getElementById("productRoutineHelp");
+      const usesPerDayHelpEl = document.getElementById("productUsesPerDayHelp");
+      const routineEl = document.getElementById("productRoutine");
+
+      if (routineLabelEl) {
+        routineLabelEl.textContent = isCountMode ? "사용 시간대" : "사용 루틴";
+      }
+      if (routineHelpEl) {
+        routineHelpEl.textContent = isCountMode
+          ? "시간대는 기록 분류에 사용돼요."
+          : "언제 쓰는 제품인지 선택해주세요";
+      }
+      if (usesPerDayHelpEl) {
+        usesPerDayHelpEl.textContent = isCountMode
+          ? "하루 사용 횟수는 소진일 계산에 사용되고, 시간대는 기록 분류에 사용돼요."
+          : "하루 평균 사용 횟수를 대략 입력해주세요.";
+      }
+      if (routineEl) {
+        Array.from(routineEl.options).forEach((optionEl) => {
+          optionEl.textContent = isCountMode
+            ? (optionEl.dataset.countLabel || optionEl.textContent)
+            : (optionEl.dataset.volumeLabel || optionEl.textContent);
+        });
+      }
+    }
+
     function getProductFormValidationState() {
       const nameInputEl = document.getElementById("productName");
       const name = nameInputEl ? nameInputEl.value.trim() : "";
-      const mlValidationState = getProductMlValidationState();
+      const trackingMode = getProductTrackingMode();
+      const mlValidationState = trackingMode === "volume"
+        ? getProductMlValidationState()
+        : {
+          isValid: true,
+          productStartType: getProductStartType(),
+          totalMl: DEFAULT_TOTAL_ML,
+          currentMl: DEFAULT_TOTAL_ML,
+          perUseMl: DEFAULT_PER_USE_ML,
+          totalMlError: "",
+          currentMlError: "",
+          perUseMlError: "",
+          firstInvalidEl: null
+        };
+      const countValidationState = trackingMode === "count"
+        ? getProductCountValidationState()
+        : {
+          isValid: true,
+          remainingUses: null,
+          usesPerDay: null,
+          remainingUsesError: "",
+          usesPerDayError: "",
+          firstInvalidEl: null
+        };
       const frequencyValidationState = getProductUsageFrequencyValidationState();
       const nameError = name ? "" : "제품명을 입력해주세요";
+      const trackingValidationState = trackingMode === "count" ? countValidationState : mlValidationState;
 
       return {
         ...mlValidationState,
+        ...countValidationState,
         ...frequencyValidationState,
+        trackingMode,
         name,
         nameError,
-        isValid: !nameError && mlValidationState.isValid && frequencyValidationState.isValid,
+        isValid: !nameError && trackingValidationState.isValid && frequencyValidationState.isValid,
         firstInvalidEl: nameError
           ? nameInputEl
-          : (mlValidationState.firstInvalidEl || frequencyValidationState.firstInvalidEl)
+          : (trackingValidationState.firstInvalidEl || frequencyValidationState.firstInvalidEl)
       };
     }
 
@@ -7987,6 +8238,14 @@
       const routineEl = document.getElementById("productRoutine");
       const inputEl = document.getElementById("productUsageFrequencyPerDay");
       const routine = normalizeRoutineValue(routineEl?.value);
+      if (getProductTrackingMode() === "count") {
+        return {
+          isValid: true,
+          usageFrequencyPerDay: getRoutineDailyFrequency(routine),
+          usageFrequencyError: "",
+          firstInvalidEl: null
+        };
+      }
       const isFlexible = routine === "flexible";
       const rawValue = inputEl ? inputEl.value.trim() : "";
       const numeric = Number(rawValue);
@@ -8093,17 +8352,64 @@
       };
     }
 
+    function getProductCountValidationState() {
+      const remainingUsesInputEl = document.getElementById("productRemainingUses");
+      const usesPerDayInputEl = document.getElementById("productUsesPerDay");
+      const remainingUsesRaw = remainingUsesInputEl ? remainingUsesInputEl.value.trim() : "";
+      const usesPerDayRaw = usesPerDayInputEl ? usesPerDayInputEl.value.trim() : "";
+      const remainingUsesNumeric = Number(remainingUsesRaw);
+      const usesPerDayNumeric = Number(usesPerDayRaw);
+      let remainingUsesError = "";
+      let usesPerDayError = "";
+      let firstInvalidEl = null;
+
+      if (!remainingUsesRaw) {
+        remainingUsesError = "남은 사용 가능 횟수를 입력해주세요";
+        firstInvalidEl = remainingUsesInputEl;
+      } else if (!Number.isFinite(remainingUsesNumeric)) {
+        remainingUsesError = "남은 사용 가능 횟수는 숫자로 입력해주세요";
+        firstInvalidEl = remainingUsesInputEl;
+      } else if (remainingUsesNumeric <= 0) {
+        remainingUsesError = "남은 사용 가능 횟수는 1회 이상 입력해주세요";
+        firstInvalidEl = remainingUsesInputEl;
+      }
+
+      if (!usesPerDayRaw) {
+        usesPerDayError = "하루 사용 횟수를 입력해주세요";
+        if (!firstInvalidEl) firstInvalidEl = usesPerDayInputEl;
+      } else if (!Number.isFinite(usesPerDayNumeric)) {
+        usesPerDayError = "하루 사용 횟수는 숫자로 입력해주세요";
+        if (!firstInvalidEl) firstInvalidEl = usesPerDayInputEl;
+      } else if (usesPerDayNumeric <= 0) {
+        usesPerDayError = "하루 사용 횟수는 0보다 크게 입력해주세요";
+        if (!firstInvalidEl) firstInvalidEl = usesPerDayInputEl;
+      }
+
+      return {
+        isValid: !remainingUsesError && !usesPerDayError,
+        remainingUses: !remainingUsesError ? normalizeCountValue(remainingUsesNumeric, null) : null,
+        usesPerDay: !usesPerDayError ? normalizeUsesPerDayValue(usesPerDayNumeric, null) : null,
+        remainingUsesError,
+        usesPerDayError,
+        firstInvalidEl
+      };
+    }
+
     function hasVisibleProductMlValidationError() {
       const nameErrorEl = document.getElementById("productNameError");
       const totalErrorEl = document.getElementById("productTotalMlError");
       const currentErrorEl = document.getElementById("productCurrentMlError");
       const perUseErrorEl = document.getElementById("productPerUseMlError");
+      const remainingUsesErrorEl = document.getElementById("productRemainingUsesError");
+      const usesPerDayErrorEl = document.getElementById("productUsesPerDayError");
       const usageFrequencyErrorEl = document.getElementById("productUsageFrequencyPerDayError");
       return Boolean(
         (nameErrorEl && !nameErrorEl.classList.contains("hidden")) ||
         (totalErrorEl && !totalErrorEl.classList.contains("hidden")) ||
         (currentErrorEl && !currentErrorEl.classList.contains("hidden")) ||
         (perUseErrorEl && !perUseErrorEl.classList.contains("hidden")) ||
+        (remainingUsesErrorEl && !remainingUsesErrorEl.classList.contains("hidden")) ||
+        (usesPerDayErrorEl && !usesPerDayErrorEl.classList.contains("hidden")) ||
         (usageFrequencyErrorEl && !usageFrequencyErrorEl.classList.contains("hidden"))
       );
     }
@@ -8126,7 +8432,13 @@
         } else if (pendingProductCreation) {
           statusEl.textContent = "제품을 추가하는 중이에요...";
           statusEl.className = "product-form-status";
-        } else if (validationState.nameError && (validationState.totalMlError || validationState.currentMlError || validationState.perUseMlError)) {
+        } else if (validationState.nameError && (
+          validationState.totalMlError
+          || validationState.currentMlError
+          || validationState.perUseMlError
+          || validationState.remainingUsesError
+          || validationState.usesPerDayError
+        )) {
           statusEl.textContent = "제품명을 먼저 입력해주세요";
           statusEl.className = "product-form-status";
         } else if (validationState.nameError) {
@@ -8140,6 +8452,12 @@
           statusEl.className = "product-form-status";
         } else if (validationState.perUseMlError) {
           statusEl.textContent = validationState.perUseMlError;
+          statusEl.className = "product-form-status";
+        } else if (validationState.remainingUsesError) {
+          statusEl.textContent = validationState.remainingUsesError;
+          statusEl.className = "product-form-status";
+        } else if (validationState.usesPerDayError) {
+          statusEl.textContent = validationState.usesPerDayError;
           statusEl.className = "product-form-status";
         } else if (validationState.usageFrequencyError) {
           statusEl.textContent = validationState.usageFrequencyError;
@@ -8162,6 +8480,8 @@
       setProductInputError("productTotalMl", validationState.totalMlError);
       setProductInputError("productCurrentMl", validationState.currentMlError);
       setProductInputError("productPerUseMl", validationState.perUseMlError);
+      setProductInputError("productRemainingUses", validationState.remainingUsesError);
+      setProductInputError("productUsesPerDay", validationState.usesPerDayError);
       setProductInputError("productUsageFrequencyPerDay", validationState.usageFrequencyError);
       updateAddProductButtonState(validationState);
       return validationState;
@@ -8173,6 +8493,8 @@
       const totalMlInputEl = document.getElementById("productTotalMl");
       const currentMlInputEl = document.getElementById("productCurrentMl");
       const perUseMlInputEl = document.getElementById("productPerUseMl");
+      const remainingUsesInputEl = document.getElementById("productRemainingUses");
+      const usesPerDayInputEl = document.getElementById("productUsesPerDay");
       const usageFrequencyInputEl = document.getElementById("productUsageFrequencyPerDay");
       const showExistingErrors = hasVisibleProductMlValidationError();
       const showNameError = showExistingErrors
@@ -8187,6 +8509,12 @@
       const showPerUseMlError = showExistingErrors
         || productFormTouchedFields.has("productPerUseMl")
         || Boolean(perUseMlInputEl && perUseMlInputEl.value.trim());
+      const showRemainingUsesError = showExistingErrors
+        || productFormTouchedFields.has("productRemainingUses")
+        || Boolean(remainingUsesInputEl && remainingUsesInputEl.value.trim());
+      const showUsesPerDayError = showExistingErrors
+        || productFormTouchedFields.has("productUsesPerDay")
+        || Boolean(usesPerDayInputEl && usesPerDayInputEl.value.trim());
       const showUsageFrequencyError = showExistingErrors
         || productFormTouchedFields.has("productUsageFrequencyPerDay")
         || Boolean(usageFrequencyInputEl && usageFrequencyInputEl.value.trim());
@@ -8195,6 +8523,8 @@
       setProductInputError("productTotalMl", showTotalMlError ? validationState.totalMlError : "");
       setProductInputError("productCurrentMl", showCurrentMlError ? validationState.currentMlError : "");
       setProductInputError("productPerUseMl", showPerUseMlError ? validationState.perUseMlError : "");
+      setProductInputError("productRemainingUses", showRemainingUsesError ? validationState.remainingUsesError : "");
+      setProductInputError("productUsesPerDay", showUsesPerDayError ? validationState.usesPerDayError : "");
       setProductInputError(
         "productUsageFrequencyPerDay",
         showUsageFrequencyError ? validationState.usageFrequencyError : ""
@@ -8271,12 +8601,19 @@
         options.usageFrequencyPerDay,
         getRoutineDailyFrequency(routine)
       );
+      const trackingMode = normalizeTrackingMode(options.trackingMode);
+      const remainingUses = trackingMode === "count"
+        ? normalizeCountValue(options.remainingUses, null)
+        : null;
+      const usesPerDay = trackingMode === "count"
+        ? normalizeUsesPerDayValue(options.usesPerDay, null)
+        : null;
       const now = options.timestamp || firebase.firestore.FieldValue.serverTimestamp();
 
       const payload = {
         ownerId: currentUid,
         name: String(options.name || "").trim(),
-        category: options.category || "기타",
+        category: normalizeProductCategoryValue(options.category),
         brand: options.brand || null,
         isActive: true,
         totalMl: totalAmount,
@@ -8289,6 +8626,9 @@
         remainingPct: remainingPercent,
         remainingPercent: remainingPercent,
         usageStepPercent: DEFAULT_USAGE_STEP_PERCENT,
+        trackingMode,
+        remainingUses,
+        usesPerDay,
         purchaseLinks: {
           ...DEFAULT_PURCHASE_LINKS
         },
@@ -8319,7 +8659,7 @@
 
       const addProductBtn = document.getElementById("addProductBtn");
       const brand = document.getElementById("productBrand").value.trim();
-      const selectedCategory = document.getElementById("productCategory").value;
+      const selectedCategory = normalizeProductCategoryValue(document.getElementById("productCategory").value);
       const routine = normalizeRoutineValue(document.getElementById("productRoutine").value);
       const validation = validateProductMlInputs();
 
@@ -8331,9 +8671,19 @@
         return;
       }
 
-      const { name, productStartType, totalMl, currentMl, perUseMl, usageFrequencyPerDay } = validation;
+      const {
+        name,
+        productStartType,
+        totalMl,
+        currentMl,
+        perUseMl,
+        usageFrequencyPerDay,
+        trackingMode,
+        remainingUses,
+        usesPerDay
+      } = validation;
       const category = selectedCategory === "기타"
-        ? detectProductCategoryFromName(name, selectedCategory)
+        ? normalizeProductCategoryValue(detectProductCategoryFromName(name, selectedCategory))
         : selectedCategory;
       pendingProductCreation = true;
       updateAddProductButtonState(validation);
@@ -8355,6 +8705,9 @@
             perUseMl,
             startType: productStartType,
             usageFrequencyPerDay,
+            trackingMode,
+            remainingUses,
+            usesPerDay,
             routine,
             timestamp: now
           });
@@ -8403,12 +8756,16 @@
         document.getElementById("productTotalMl").value = "";
         document.getElementById("productCurrentMl").value = "";
         document.getElementById("productPerUseMl").value = "";
+        document.getElementById("productRemainingUses").value = "";
+        document.getElementById("productUsesPerDay").value = "";
         document.getElementById("productRoutine").value = "morning";
         document.getElementById("productUsageFrequencyPerDay").value = "";
         clearProductMlValidationErrors();
         resetProductFormTouchedFields();
         updateAllMlPresetSelections();
         setProductStartType("new");
+        hasManualTrackingModeInput = false;
+        setProductTrackingMode("volume");
         setProductBrandFieldExpanded(false);
         setProductDetailsExpanded(false);
         updateRoutineFrequencyFieldVisibility();
@@ -8683,6 +9040,16 @@
       }
     }
 
+    function syncProductSetupCategoryNotice(row) {
+      const categoryEl = row?.querySelector('[data-setup-field="category"]');
+      const noticeEl = row?.querySelector('[data-role="setupPharmacyNotice"]');
+      if (!categoryEl || !noticeEl) return;
+
+      const isPharmacyCategory = normalizeProductCategoryValue(categoryEl.value) === "연고/약국 제품";
+      noticeEl.classList.toggle("hidden", !isPharmacyCategory);
+      noticeEl.setAttribute("aria-hidden", isPharmacyCategory ? "false" : "true");
+    }
+
     function getProductSetupInputState(productId) {
       const row = document.querySelector(`#activeProductList .product-row[data-product-id="${productId}"]`);
       if (!row) return { isValid: false, error: "설정 영역을 찾지 못했어요" };
@@ -8692,7 +9059,7 @@
       const totalMlEl = row.querySelector('[data-setup-field="totalMl"]');
       const currentMlEl = row.querySelector('[data-setup-field="currentMl"]');
       const perUseMlEl = row.querySelector('[data-setup-field="perUseMl"]');
-      const category = String(categoryEl?.value || "기타").trim() || "기타";
+      const category = normalizeProductCategoryValue(categoryEl?.value || "기타");
       const routine = normalizeRoutineValue(routineEl?.value || "morning");
       const startType = getProductSetupStartType(row);
       const isUsedProduct = startType === "used";
@@ -8873,18 +9240,29 @@
       }
     }
 
-    function updateProductRemaining(productId, nextRemain, nextPct, transaction = null) {
+    function updateProductRemaining(productId, nextRemain, nextPct, transaction = null, options = {}) {
       if (!currentUid) return;
       const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp();
-      const payload = {
-        ownerId: currentUid,
-        remainingMl: nextRemain,
-        remain: nextRemain,
-        remainingPct: nextPct,
-        remainingPercent: nextPct,
-        lastUsedAt: serverTimestamp,
-        updatedAt: serverTimestamp
-      };
+      const payload = options.trackingMode === "count"
+        ? {
+          ownerId: currentUid,
+          lastUsedAt: serverTimestamp,
+          updatedAt: serverTimestamp
+        }
+        : {
+          ownerId: currentUid,
+          remainingMl: nextRemain,
+          remain: nextRemain,
+          remainingPct: nextPct,
+          remainingPercent: nextPct,
+          lastUsedAt: serverTimestamp,
+          updatedAt: serverTimestamp
+        };
+      if (options.trackingMode === "count") {
+        payload.trackingMode = "count";
+        payload.remainingUses = normalizeCountValue(options.remainingUses, 0);
+        payload.usesPerDay = normalizeUsesPerDayValue(options.usesPerDay, null);
+      }
       const productRef = getUserRef("products").doc(productId);
 
       if (transaction) {
@@ -8899,6 +9277,25 @@
       if (!product) return null;
 
       const normalizedProduct = normalizeProductData(product);
+      if (isCountTrackingProduct(normalizedProduct)) {
+        const currentRemainingUses = normalizeCountValue(normalizedProduct.remainingUses, 0);
+        const usesPerDay = normalizeUsesPerDayValue(normalizedProduct.usesPerDay, 1);
+        if (!Number.isFinite(currentRemainingUses) || currentRemainingUses <= 0) return null;
+        const nextRemainingUses = Math.max(0, currentRemainingUses - 1);
+
+        return {
+          trackingMode: "count",
+          currentRemain: currentRemainingUses,
+          nextRemain: nextRemainingUses,
+          currentRemainingUses,
+          nextRemainingUses,
+          usesPerDay,
+          currentRemainingPercent: calculateRemainingPercent(normalizedProduct),
+          nextRemainingPercent: calculateRemainingPercent(normalizedProduct),
+          deltaPct: 0
+        };
+      }
+
       const currentRemain = calculateRemainingMl(normalizedProduct);
       const perUseMl = Number(normalizedProduct.perUseMl);
       if (!Number.isFinite(currentRemain) || !Number.isFinite(perUseMl) || perUseMl <= 0) return null;
@@ -9057,16 +9454,26 @@
       const optimisticRemain = optimisticUsageState.nextRemain;
       const optimisticRemainingPercent = optimisticUsageState.nextRemainingPercent;
       const optimisticDeltaPct = optimisticUsageState.deltaPct;
-      const previousDaysLeftRaw = calculateDaysLeft({
-        ...product,
-        remainingMl: previousRemain,
-        remain: previousRemain
-      });
-      const optimisticDaysLeftRaw = calculateDaysLeft({
-        ...product,
-        remainingMl: optimisticRemain,
-        remain: optimisticRemain
-      });
+      const previousDaysLeftRaw = isCountTrackingProduct(product)
+        ? calculateDaysLeft({
+          ...product,
+          remainingUses: previousRemain
+        })
+        : calculateDaysLeft({
+          ...product,
+          remainingMl: previousRemain,
+          remain: previousRemain
+        });
+      const optimisticDaysLeftRaw = isCountTrackingProduct(product)
+        ? calculateDaysLeft({
+          ...product,
+          remainingUses: optimisticRemain
+        })
+        : calculateDaysLeft({
+          ...product,
+          remainingMl: optimisticRemain,
+          remain: optimisticRemain
+        });
       const previousDisplayDaysLeft = getDisplayDaysLeft(previousDaysLeftRaw);
       let committedUsageState = null;
       let didLockUsageAction = false;
@@ -9078,10 +9485,16 @@
 
       pendingUsageProductIds.add(productId);
       highlightRecentlyUsedProduct(productId);
-      product.remainingMl = optimisticRemain;
-      product.remain = optimisticRemain;
-      product.remainingPct = optimisticRemainingPercent;
-      product.remainingPercent = optimisticRemainingPercent;
+      if (optimisticUsageState.trackingMode === "count") {
+        product.trackingMode = "count";
+        product.remainingUses = optimisticRemain;
+        product.usesPerDay = optimisticUsageState.usesPerDay;
+      } else {
+        product.remainingMl = optimisticRemain;
+        product.remain = optimisticRemain;
+        product.remainingPct = optimisticRemainingPercent;
+        product.remainingPercent = optimisticRemainingPercent;
+      }
       prependOptimisticRecentEvent(
         product,
         optimisticDeltaPct,
@@ -9111,7 +9524,11 @@
           const deltaPct = nextUsageState.deltaPct;
           const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp();
 
-          updateProductRemaining(productId, nextRemain, nextRemaining, transaction);
+          updateProductRemaining(productId, nextRemain, nextRemaining, transaction, {
+            trackingMode: nextUsageState.trackingMode,
+            remainingUses: nextUsageState.nextRemainingUses,
+            usesPerDay: nextUsageState.usesPerDay
+          });
           transaction.set(usageLogRef, {
             ownerId: currentUser.uid,
             productId,
@@ -9128,26 +9545,41 @@
             remainingMl: nextRemain,
             remain: nextRemain,
             remainingPct: nextRemaining,
-            remainingPercent: nextRemaining
+            remainingPercent: nextRemaining,
+            trackingMode: nextUsageState.trackingMode,
+            remainingUses: nextUsageState.nextRemainingUses,
+            usesPerDay: nextUsageState.usesPerDay
           };
         });
 
         if (committedUsageState) {
-          product.remainingMl = committedUsageState.remainingMl;
-          product.remain = committedUsageState.remain;
-          product.remainingPct = committedUsageState.remainingPct;
-          product.remainingPercent = committedUsageState.remainingPercent;
+          if (committedUsageState.trackingMode === "count") {
+            product.trackingMode = "count";
+            product.remainingUses = committedUsageState.remainingUses;
+            product.usesPerDay = committedUsageState.usesPerDay;
+          } else {
+            product.remainingMl = committedUsageState.remainingMl;
+            product.remain = committedUsageState.remain;
+            product.remainingPct = committedUsageState.remainingPct;
+            product.remainingPercent = committedUsageState.remainingPercent;
+          }
           renderActiveProductsList();
         }
         await renderRecentEvents();
         renderActiveProductsList();
         if (normalizedSession) {
           const nextDaysLeftRaw = committedUsageState
-            ? calculateDaysLeft({
-              ...product,
-              remainingMl: committedUsageState.remainingMl,
-              remain: committedUsageState.remain
-            })
+            ? calculateDaysLeft(committedUsageState.trackingMode === "count"
+              ? {
+                ...product,
+                remainingUses: committedUsageState.remainingUses,
+                usesPerDay: committedUsageState.usesPerDay
+              }
+              : {
+                ...product,
+                remainingMl: committedUsageState.remainingMl,
+                remain: committedUsageState.remain
+              })
             : optimisticDaysLeftRaw;
           const nextDisplayDaysLeft = getDisplayDaysLeft(nextDaysLeftRaw);
           const daysReduced = Math.max(0, previousDisplayDaysLeft - nextDisplayDaysLeft);
@@ -9192,10 +9624,16 @@
       } catch (error) {
         const rollbackTarget = activeProducts.find((item) => item.id === productId);
         if (rollbackTarget) {
-          rollbackTarget.remainingMl = previousRemain;
-          rollbackTarget.remain = previousRemain;
-          rollbackTarget.remainingPct = previousRemainingPercent;
-          rollbackTarget.remainingPercent = previousRemainingPercent;
+          if (optimisticUsageState.trackingMode === "count") {
+            rollbackTarget.trackingMode = "count";
+            rollbackTarget.remainingUses = previousRemain;
+            rollbackTarget.usesPerDay = optimisticUsageState.usesPerDay;
+          } else {
+            rollbackTarget.remainingMl = previousRemain;
+            rollbackTarget.remain = previousRemain;
+            rollbackTarget.remainingPct = previousRemainingPercent;
+            rollbackTarget.remainingPercent = previousRemainingPercent;
+          }
         }
         await renderRecentEvents();
         renderActiveProductsList();
@@ -9245,7 +9683,7 @@
             && isProductInRoutine(product, routineType)
             && (!selectedProductIdSet || selectedProductIdSet.has(product.id))
             && !todayUsageState[routineType]?.has(product.id)
-            && calculateRemainingMl(product) > 0;
+            && hasProductRemaining(product);
         })
         .map((product) => product.id);
       const eligibleProductIds = targetProductIds.filter((productId) => {
@@ -9887,6 +10325,14 @@
         return;
       }
 
+      const setupCategoryEl = target.closest('[data-setup-field="category"]');
+      if (setupCategoryEl) {
+        const row = target.closest(".product-row");
+        syncProductSetupCategoryNotice(row);
+        setProductSetupError(row, "");
+        return;
+      }
+
       const routineToggleEl = target.closest(".routine-product-toggle");
       if (!routineToggleEl) return;
 
@@ -10258,6 +10704,11 @@
           setProductStartType(event.currentTarget.value);
         });
       });
+      document.querySelectorAll('input[name="productTrackingMode"]').forEach((radioEl) => {
+        radioEl.addEventListener("change", (event) => {
+          setProductTrackingMode(event.currentTarget.value, { manual: true });
+        });
+      });
       document.getElementById("productCurrentMl").addEventListener("input", () => {
         markProductFormFieldTouched("productCurrentMl");
         refreshProductMlValidationPreview();
@@ -10275,6 +10726,26 @@
       document.getElementById("productPerUseMl").addEventListener("blur", () => {
         markProductFormFieldTouched("productPerUseMl");
         updateMlPresetSelection("productPerUseMl");
+        refreshProductMlValidationPreview();
+      });
+      document.getElementById("productRemainingUses").addEventListener("input", () => {
+        markProductFormFieldTouched("productRemainingUses");
+        updateMlPresetSelection("productRemainingUses");
+        refreshProductMlValidationPreview();
+      });
+      document.getElementById("productRemainingUses").addEventListener("blur", () => {
+        markProductFormFieldTouched("productRemainingUses");
+        updateMlPresetSelection("productRemainingUses");
+        refreshProductMlValidationPreview();
+      });
+      document.getElementById("productUsesPerDay").addEventListener("input", () => {
+        markProductFormFieldTouched("productUsesPerDay");
+        updateMlPresetSelection("productUsesPerDay");
+        refreshProductMlValidationPreview();
+      });
+      document.getElementById("productUsesPerDay").addEventListener("blur", () => {
+        markProductFormFieldTouched("productUsesPerDay");
+        updateMlPresetSelection("productUsesPerDay");
         refreshProductMlValidationPreview();
       });
       document.getElementById("productRoutine").addEventListener("change", () => {
