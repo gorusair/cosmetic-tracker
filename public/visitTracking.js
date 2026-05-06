@@ -1,12 +1,14 @@
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 import { getFirebaseAuth } from "./firebaseClient.js";
 import {
+  getKoreanReadableTime,
+  getTrackingAttributionContext,
+  getTrackingDeviceType,
   getTrackingUserContext,
-  normalizeTrackingText,
+  writeAppEvent,
   writeTrackingEvent
 } from "./trackingShared.js";
 
-const VISIT_LOG_STORAGE_KEY = "visit_logged_today";
 const auth = getFirebaseAuth();
 
 function isDemoMode() {
@@ -16,25 +18,6 @@ function isDemoMode() {
     console.error("Failed to evaluate demo mode", error);
     return false;
   }
-}
-
-function getSourceFromUrl() {
-  try {
-    const source = new URLSearchParams(window.location.search).get("source");
-    return normalizeTrackingText(source, "direct");
-  } catch (error) {
-    console.error("Failed to read visit source", error);
-    return "direct";
-  }
-}
-
-function getTodayString() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
 }
 
 function shouldSkipVisitLogging() {
@@ -65,42 +48,28 @@ async function logVisitOnce() {
     return;
   }
 
-  if (!auth.currentUser) {
-    console.log("skip firestore (demo mode)");
-    return;
-  }
-
-  const today = getTodayString();
-
-  try {
-    const lastLoggedDate = window.localStorage.getItem(VISIT_LOG_STORAGE_KEY);
-    if (lastLoggedDate === today) {
-      return;
-    }
-  } catch (error) {
-    console.error("Failed to read visit log cache", error);
-  }
-
   try {
     const currentUser = auth.currentUser;
     const { isAnonymous, uid } = getTrackingUserContext(currentUser);
+    const { from, source } = getTrackingAttributionContext();
 
     await writeTrackingEvent("visits", {
+      readableTime: getKoreanReadableTime(),
       page: window.location.pathname,
-      source: getSourceFromUrl(),
+      search: window.location.search,
+      from,
+      source,
       referrer: document.referrer || "",
-      userAgent: navigator.userAgent,
-      language: navigator.language || "",
-      isAnonymous,
       uid,
-      loggedDate: today
+      isAnonymous,
+      language: navigator.language || "",
+      userAgent: navigator.userAgent,
+      deviceType: getTrackingDeviceType(),
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight
     });
 
-    try {
-      window.localStorage.setItem(VISIT_LOG_STORAGE_KEY, today);
-    } catch (error) {
-      console.error("Failed to write visit log cache", error);
-    }
+    await writeAppEvent("visit", currentUser);
   } catch (error) {
     console.error("Failed to log visit", error);
   }

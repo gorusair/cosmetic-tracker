@@ -117,6 +117,15 @@
       "productChanges",
       "skinEvents"
     ]);
+    const FIRESTORE_EVENT_NAMES = new Set([
+      "start_clicked",
+      "anonymous_login",
+      "google_login",
+      "product_added",
+      "today_used",
+      "calendar_opened",
+      "email_alert_clicked"
+    ]);
     const NAV_SCROLL_TARGETS = Object.freeze({
       home: Object.freeze(["soonDepletionSection"]),
       productForm: Object.freeze(["productFormSection", "productFormShell", "productCreationCard", "productInputContainer", "productAddSection"]),
@@ -2476,6 +2485,7 @@
         const signedInUser = await pendingAuthUser.promise;
         currentUser = signedInUser || auth.currentUser || currentUser;
         currentUid = currentUser?.uid || currentUid;
+        recordFirestoreEvent("anonymous_login");
         updateAuthUI(currentUser);
         updateProductFormVisibility();
         updateAddProductButtonState();
@@ -4059,6 +4069,7 @@
     }
 
     function changeUsageCalendarMonth(monthOffset) {
+      recordFirestoreEvent("calendar_opened");
       const nextMonth = new Date(usageCalendarVisibleMonth);
       nextMonth.setMonth(nextMonth.getMonth() + monthOffset, 1);
       usageCalendarVisibleMonth = startOfDay(nextMonth);
@@ -4071,6 +4082,7 @@
       if (!(target instanceof Element)) return;
       const dayBtn = target.closest("[data-calendar-date]");
       if (!dayBtn) return;
+      recordFirestoreEvent("calendar_opened");
       selectedUsageCalendarDateKey = dayBtn.getAttribute("data-calendar-date") || selectedUsageCalendarDateKey;
       renderUsageCalendar(historyUsageEvents);
     }
@@ -5998,11 +6010,11 @@
     function getHeroPriorityLabel(product) {
       if (!product) return "";
       if (doesProductNeedTodayRecord(product)) {
-        return "오늘 기록 필요";
+        return "오늘 피부 기록 필요";
       }
       return hasProductUsageToday(product)
-        ? "추가 사용했다면 지금 기록하세요"
-        : "오늘 사용했다면 기록하세요";
+        ? "추가로 쓴 제품이 있다면 기록하세요"
+        : "오늘 쓴 제품을 기록하세요";
     }
 
     function getHeroActionUrgencyMessage(product) {
@@ -6024,7 +6036,7 @@
     }
 
     function getHomePriorityActionMessage(daysLeft) {
-      return "지금 기록하면 D-day 예상이 바로 업데이트돼요";
+      return "제품을 체크하면 나중에 피부 변화와 함께 볼 수 있어요";
     }
 
     function getHomePriorityProduct(products = getHomeDisplayProducts()) {
@@ -6076,8 +6088,8 @@
     function getHomePriorityEmptyMarkup() {
       return `
         <article class="home-priority-card home-priority-card--empty">
-          <h4>첫 제품을 추가하고 오늘 기록을 시작하세요</h4>
-          <p class="home-priority-empty-copy">제품 1개만 등록하면 오늘 기록할 위치로 바로 이어집니다.</p>
+          <h4>오늘 쓴 제품과 피부 상태를 함께 기록해보세요</h4>
+          <p class="home-priority-empty-copy">제품 1개만 등록하면 오늘 피부 기록을 바로 시작할 수 있어요.</p>
         </article>
       `;
     }
@@ -6436,6 +6448,43 @@
         });
     }
 
+    let firestoreEventLoggerPromise = null;
+
+    function getFirestoreEventLogger() {
+      if (!firestoreEventLoggerPromise) {
+        firestoreEventLoggerPromise = import("./trackingShared.js")
+          .then((module) => {
+            return {
+              log(eventName) {
+                const eventUser = currentUser || auth?.currentUser || null;
+                return module.writeAppEvent(eventName, eventUser);
+              }
+            };
+          })
+          .catch((error) => {
+            console.error(error);
+            firestoreEventLoggerPromise = null;
+            return null;
+          });
+      }
+
+      return firestoreEventLoggerPromise;
+    }
+
+    function recordFirestoreEvent(eventName) {
+      const safeEventName = String(eventName || "").trim();
+      if (!FIRESTORE_EVENT_NAMES.has(safeEventName)) return;
+
+      void getFirestoreEventLogger()
+        .then((logger) => {
+          if (!logger) return;
+          return logger.log(safeEventName);
+        })
+        .catch((error) => {
+          console.error(error);
+        });
+    }
+
     function calculatePurchaseIntentScore({ daysLeft, remainingPercent } = {}) {
       const safeDaysLeft = Number.isFinite(Number(daysLeft)) ? Number(daysLeft) : Number.MAX_SAFE_INTEGER;
       const safeRemainingPercent = Number.isFinite(Number(remainingPercent))
@@ -6735,6 +6784,7 @@
           productName: getPurchaseProductName(product),
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
+        recordFirestoreEvent("email_alert_clicked");
         setDepletionNotifyStatus(formEl, "소진 전에 이메일로 알려드릴게요", "success");
       } catch (error) {
         console.error("Unable to save depletion notification setting.", error);
@@ -7113,12 +7163,12 @@
     function getTopCtaConfig() {
       const baseConfig = {
         priorityLabel: "지금 할 일",
-        title: "오늘 기록할 제품",
+        title: "오늘 피부 상태와 사용한 제품을 기록해보세요.",
         text: "첫 제품",
         subtext: "D-day",
         helperText: "",
         buttonLabel: "지금 기록하기",
-        note: "오늘 사용한 제품만 빠르게 기록하세요",
+        note: "제품을 체크하면 나중에 피부 변화와 함께 볼 수 있어요.",
         mode: "add-product",
         disabled: false
       };
@@ -7127,7 +7177,7 @@
         const demoItem = getDemoModeSoonDepletionItems()[0] || LANDING_DEMO_DEPLETION_ITEMS[0];
         return {
           ...baseConfig,
-          title: "오늘 기록할 제품",
+          title: "오늘 피부 상태와 사용한 제품을 기록해보세요.",
           text: demoItem?.name || "수분 세럼",
           subtext: getSoonDepletionDdayLabel(demoItem?.daysLeft ?? 3),
           buttonLabel: "지금 기록하기",
@@ -7138,7 +7188,7 @@
       if (isLoadingProductCollection) {
         return {
           ...baseConfig,
-          title: "오늘 기록할 제품",
+          title: "오늘 피부 기록을 불러오는 중입니다.",
           text: "불러오는 중",
           subtext: "D-day",
           buttonLabel: "소진 시점 예측 불러오는 중",
@@ -7151,7 +7201,7 @@
           ...baseConfig,
           mode: "add-product",
           buttonLabel: "제품 추가",
-          note: "제품 1개만 추가하면 바로 기록할 수 있어요"
+          note: "제품 1개만 추가하면 오늘 피부 기록을 바로 시작할 수 있어요."
         };
       }
 
@@ -7162,7 +7212,7 @@
           ...baseConfig,
           mode: "add-product",
           buttonLabel: "제품 추가",
-          note: "제품 1개만 추가하면 바로 기록할 수 있어요"
+          note: "제품 1개만 추가하면 오늘 피부 기록을 바로 시작할 수 있어요."
         };
       }
 
@@ -7171,11 +7221,11 @@
       const routineSession = getPriorityProductRoutineSession(priorityProduct);
       return {
         ...baseConfig,
-        title: "오늘 기록할 제품",
+        title: "오늘 피부 상태와 사용한 제품을 기록해보세요.",
         text: productName || "제품",
         subtext: getProductDdayLabel(daysLeft),
         buttonLabel: "지금 기록하기",
-        note: "오늘 사용한 제품만 빠르게 기록하세요",
+        note: "제품을 체크하면 나중에 피부 변화와 함께 볼 수 있어요.",
         mode: "routine",
         productId: priorityProduct.id,
         routineSession
@@ -7875,6 +7925,7 @@
         const signedInUser = await pendingAuthUser.promise;
         currentUser = signedInUser || auth.currentUser || currentUser;
         currentUid = currentUser?.uid || currentUid;
+        recordFirestoreEvent("anonymous_login");
         revealProductForm();
         updateAuthUI(currentUser);
         updateProductFormVisibility();
@@ -8542,16 +8593,20 @@
       try {
         if (linkAnonymousAccount) {
           await authUser.linkWithPopup(provider);
+          recordFirestoreEvent("google_login");
           return;
         }
         await auth.signInWithPopup(provider);
+        recordFirestoreEvent("google_login");
       } catch (error) {
         if (error.code === "auth/popup-blocked") {
           showAuthMessage("팝업이 차단되어 리디렉션 로그인으로 전환합니다.");
           if (linkAnonymousAccount) {
+            recordFirestoreEvent("google_login");
             await authUser.linkWithRedirect(provider);
             return;
           }
+          recordFirestoreEvent("google_login");
           await auth.signInWithRedirect(provider);
           return;
         }
@@ -8727,6 +8782,7 @@
 
           const productRef = await getUserRef("products").add(productPayload);
           createdProductId = productRef.id;
+          recordFirestoreEvent("product_added");
 
           await getUserRef("productChanges").add({
             type: "add",
@@ -8868,6 +8924,7 @@
           }
 
           await commitCurrentBatch();
+          recordFirestoreEvent("product_added");
 
           writeStorageItem(SAMPLE_DISMISSED_STORAGE_KEY, "true");
           markJustAddedFirstProduct();
@@ -9620,6 +9677,7 @@
             });
           }
         }
+        recordFirestoreEvent("today_used");
         return true;
       } catch (error) {
         const rollbackTarget = activeProducts.find((item) => item.id === productId);
@@ -10427,15 +10485,18 @@
         showOnboardingModal();
       });
       document.getElementById("landingPrimaryCta")?.addEventListener("click", async () => {
+        recordFirestoreEvent("start_clicked");
         await handleLandingInputCta();
       });
       document.getElementById("landingQuickProductName")?.addEventListener("keydown", async (event) => {
         if (event.key !== "Enter") return;
         event.preventDefault();
+        recordFirestoreEvent("start_clicked");
         await handleLandingInputCta();
       });
 
       document.getElementById("googleLoginBtn")?.addEventListener("click", async () => {
+        recordFirestoreEvent("start_clicked");
         recordFirebaseClickEvent("click_login", {
           method: "google",
           source: "landing"
@@ -10443,6 +10504,7 @@
         await handleGoogleStartFlow();
       });
       document.getElementById("demoPromptGoogleLoginBtn")?.addEventListener("click", async () => {
+        recordFirestoreEvent("start_clicked");
         recordFirebaseClickEvent("click_login", {
           method: "google",
           source: "demo_prompt"
@@ -10466,6 +10528,7 @@
       });
 
       document.getElementById("anonLoginBtn")?.addEventListener("click", async () => {
+        recordFirestoreEvent("start_clicked");
         recordFirebaseClickEvent("click_login", {
           method: "anonymous",
           source: "landing"
@@ -10473,6 +10536,7 @@
         await handleLandingPrimaryCta();
       });
       document.getElementById("demoPromptAnonLoginBtn")?.addEventListener("click", async () => {
+        recordFirestoreEvent("start_clicked");
         recordFirebaseClickEvent("click_login", {
           method: "anonymous",
           source: "demo_prompt"
@@ -10502,6 +10566,7 @@
       });
       document.getElementById("showHistoryBtn").addEventListener("click", async () => {
         console.log("[nav] history");
+        recordFirestoreEvent("calendar_opened");
         await setActiveScreen("history");
         requestAnimationFrame(() => {
           scrollToNavTarget("history");
@@ -10651,6 +10716,7 @@
       });
       document.getElementById("cta-btn").addEventListener("click", async () => {
         if (isLandingTransitionRunning) return;
+        recordFirestoreEvent("start_clicked");
         activeScreen = "home";
         writeStorageItem(ACTIVE_VIEW_STORAGE_KEY, activeScreen);
         const didRevealSections = await playLandingToServiceTransition();

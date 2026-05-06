@@ -43,35 +43,94 @@ service cloud.firestore {
     match /visits/{docId} {
       allow create: if request.resource.data.keys().hasOnly([
           "createdAt",
+          "readableTime",
           "page",
+          "search",
+          "from",
           "source",
           "referrer",
-          "userAgent",
-          "language",
-          "isAnonymous",
           "uid",
-          "loggedDate"
+          "isAnonymous",
+          "language",
+          "userAgent",
+          "deviceType",
+          "viewportWidth",
+          "viewportHeight"
         ])
         && request.resource.data.keys().hasAll([
           "createdAt",
+          "readableTime",
           "page",
+          "search",
+          "from",
           "source",
           "referrer",
-          "userAgent",
-          "language",
-          "isAnonymous",
           "uid",
-          "loggedDate"
+          "isAnonymous",
+          "language",
+          "userAgent",
+          "deviceType",
+          "viewportWidth",
+          "viewportHeight"
         ])
         && request.resource.data.createdAt == request.time
+        && request.resource.data.readableTime is string
         && request.resource.data.page is string
+        && request.resource.data.search is string
+        && request.resource.data.from is string
         && request.resource.data.source is string
         && request.resource.data.referrer is string
-        && request.resource.data.userAgent is string
-        && request.resource.data.language is string
+        && request.resource.data.uid is string
         && request.resource.data.isAnonymous is bool
-        && (request.resource.data.uid == null || request.resource.data.uid is string)
-        && request.resource.data.loggedDate is string;
+        && request.resource.data.language is string
+        && request.resource.data.userAgent is string
+        && request.resource.data.deviceType in ["mobile", "desktop"]
+        && request.resource.data.viewportWidth is number
+        && request.resource.data.viewportHeight is number;
+      allow read, update, delete: if false;
+    }
+
+    match /events/{docId} {
+      allow create: if request.resource.data.keys().hasOnly([
+          "eventName",
+          "createdAt",
+          "readableTime",
+          "page",
+          "from",
+          "source",
+          "uid",
+          "isAnonymous",
+          "deviceType"
+        ])
+        && request.resource.data.keys().hasAll([
+          "eventName",
+          "createdAt",
+          "readableTime",
+          "page",
+          "from",
+          "source",
+          "uid",
+          "isAnonymous",
+          "deviceType"
+        ])
+        && request.resource.data.eventName in [
+          "visit",
+          "start_clicked",
+          "anonymous_login",
+          "google_login",
+          "product_added",
+          "today_used",
+          "calendar_opened",
+          "email_alert_clicked"
+        ]
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.readableTime is string
+        && request.resource.data.page is string
+        && request.resource.data.from is string
+        && request.resource.data.source is string
+        && request.resource.data.uid is string
+        && request.resource.data.isAnonymous is bool
+        && request.resource.data.deviceType in ["mobile", "desktop"];
       allow read, update, delete: if false;
     }
 

@@ -98,7 +98,7 @@
       </section>
       <div class="modal-actions">
         <button id="closeOnboardingBtn" class="btn-secondary" type="button">닫기</button>
-        <button id="startOnboardingBtn">간단히 입력하고 시작하기</button>
+        <button id="startOnboardingBtn">오늘 피부 기록 시작하기</button>
       </div>
     </div>
   </div>
@@ -181,12 +181,12 @@
     <section id="emptyLandingScreen" class="hero-section empty-landing" aria-label="서비스 소개">
       <div class="empty-landing-shell">
         <div class="empty-landing-copy">
-          <h2>안 보이는 화장품 잔량,<br />언제 떨어질지 대략 알려드려요.</h2>
-          <p>튜브형 크림, 펌프형 에센스, 선크림처럼<br />남은 양이 잘 안 보이는 제품을 대략 기록해보세요.</p>
+          <h2>피부가 뒤집어진 날,<br />무슨 제품을 썼는지 기억나나요?</h2>
+          <p>오늘 쓴 제품과 피부 상태를 함께 기록하고,<br />내 피부에 맞는 루틴을 찾아보세요.</p>
         </div>
 
         <div id="landingQuickProductEntry" class="usage-config-group product-form-field product-form-field--name" aria-label="빠른 제품 입력">
-          <p class="landing-input-flow">제품 이름만 입력하면 대략 잔량 기록을 시작할 수 있어요</p>
+          <p class="landing-input-flow">오늘 쓴 제품을 먼저 적고 피부 변화를 함께 남겨보세요</p>
           <label for="landingQuickProductName" class="field-label">빠른 제품 입력</label>
           <input
             id="landingQuickProductName"
@@ -195,8 +195,9 @@
             aria-describedby="landingQuickProductHelp"
           />
           <p id="landingQuickProductHelp" class="usage-input-help">정확하지 않아도 괜찮아요. 나중에 언제든 수정할 수 있어요</p>
+          <p class="usage-input-help">자주 쓰는 제품은 소진 시점도 함께 확인할 수 있어요.</p>
           <button id="landingPrimaryCta" class="landing-primary-cta" type="button">
-            간단히 입력하고 시작하기
+            오늘 피부 기록 시작하기
           </button>
           <div id="demoLoginPrompt" class="demo-login-prompt hidden" aria-hidden="true">
             <strong class="demo-login-prompt-value">먼저 가볍게 써보세요</strong>
@@ -265,21 +266,21 @@
         <div class="home-section-heading">
           <div>
             <div class="today-status-eyebrow">오늘 할 일</div>
-            <h3>오늘 기록할 제품</h3>
+            <h3>오늘 피부 기록</h3>
           </div>
         </div>
         <div class="today-action-hub">
           <div id="activeTodayCtaSection" class="active-cta-section" aria-label="오늘 할 일 실행">
             <div id="today-cta" class="home-primary-cta today-action-panel" aria-hidden="false">
               <div class="today-action-copy">
-                <strong id="topCtaTitle">오늘 사용한 제품 지금 기록하세요</strong>
+                <strong id="topCtaTitle">오늘 피부 상태와 사용한 제품을 기록해보세요.</strong>
                 <p id="topCtaHelper" class="cta-helper hidden"></p>
               </div>
               <div class="today-action-buttons">
                 <button id="cta-btn" type="button" data-action="add-product">지금 기록하기</button>
                 <button id="topSecondaryActionBtn" class="top-secondary-action-btn" type="button" data-action="add-product">제품 추가</button>
               </div>
-              <p id="topCtaNote" class="cta-note" aria-live="polite">오늘 사용한 제품만 빠르게 기록하세요</p>
+              <p id="topCtaNote" class="cta-note" aria-live="polite">제품을 체크하면 나중에 피부 변화와 함께 볼 수 있어요.</p>
             </div>
           </div>
           <div class="today-representative-block" aria-label="곧 소진 대표 제품">
