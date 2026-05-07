@@ -2,16 +2,16 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <title>Skinin - 화장품 소진일 관리</title>
-  <meta name="description" content="대략 기록해도 화장품 소진 시점과 구매 타이밍을 알려주는 Skinin" />
+  <title>Skinin - 피부관리 노트</title>
+  <meta name="description" content="오늘 쓴 제품과 피부 상태를 함께 기록하는 Skinin 피부관리 노트" />
   <meta name="keywords" content="Skinin, 스킨인, 화장품 소진일, 화장품 관리, 스킨케어 루틴, 구매 타이밍" />
   <meta property="og:type" content="website" />
-  <meta property="og:title" content="Skinin - 화장품 소진일 관리" />
-  <meta property="og:description" content="대략 기록해도 화장품 소진 시점과 구매 타이밍을 알려주는 Skinin" />
+  <meta property="og:title" content="Skinin - 피부관리 노트" />
+  <meta property="og:description" content="오늘 쓴 제품과 피부 상태를 함께 기록하는 Skinin 피부관리 노트" />
   <meta property="og:url" content="https://skinin.kr" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Skinin - 화장품 소진일 관리" />
-  <meta name="twitter:description" content="대략 기록해도 화장품 소진 시점과 구매 타이밍을 알려주는 Skinin" />
+  <meta name="twitter:title" content="Skinin - 피부관리 노트" />
+  <meta name="twitter:description" content="오늘 쓴 제품과 피부 상태를 함께 기록하는 Skinin 피부관리 노트" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#f28ca8">
@@ -42,7 +42,7 @@
   <header class="nav">
     <div class="nav-title">
       <h1>Skinin</h1>
-      <p>안 보이는 잔량과 소진 시점을 대략 알려드려요</p>
+      <p>오늘 쓴 제품과 피부 상태를 함께 기록해요</p>
     </div>
     <div class="view-switch" aria-label="화면 전환">
       <button id="showHomeBtn" class="view-switch-btn view-switch-btn--active" type="button">홈</button>
@@ -50,6 +50,7 @@
     </div>
     <button id="logoutBtn" class="nav-logout-btn hidden" type="button">로그아웃</button>
   </header>
+  <div id="authStateBanner" class="auth-state-banner hidden" aria-hidden="true"></div>
 
   <!-- Usage guide modal -->
   <div id="onboardingModal" class="modal-backdrop hidden" aria-hidden="true" inert hidden>
@@ -182,29 +183,34 @@
       <div class="empty-landing-shell">
         <div class="empty-landing-copy">
           <h2>피부가 뒤집어진 날,<br />무슨 제품을 썼는지 기억나나요?</h2>
-          <p>오늘 쓴 제품과 피부 상태를 함께 기록하고,<br />내 피부에 맞는 루틴을 찾아보세요.</p>
+          <p>오늘 피부 상태만 먼저 기록해보세요.<br />제품은 나중에 추가해도 괜찮아요.</p>
         </div>
 
-        <div id="landingQuickProductEntry" class="usage-config-group product-form-field product-form-field--name" aria-label="빠른 제품 입력">
-          <p class="landing-input-flow">오늘 쓴 제품을 먼저 적고 피부 변화를 함께 남겨보세요</p>
-          <label for="landingQuickProductName" class="field-label">빠른 제품 입력</label>
+        <div id="landingQuickProductEntry" class="usage-config-group product-form-field product-form-field--name" aria-label="피부 기록 시작">
+          <p class="landing-input-flow">자주 쓰는 제품은 소진 시점도 함께 확인할 수 있어요.</p>
+          <label for="landingQuickProductName" class="field-label hidden" aria-hidden="true">빠른 제품 입력</label>
           <input
             id="landingQuickProductName"
+            class="hidden"
             placeholder="예: 헤라 에센스"
             autocomplete="off"
             aria-describedby="landingQuickProductHelp"
+            aria-hidden="true"
+            tabindex="-1"
           />
-          <p id="landingQuickProductHelp" class="usage-input-help">정확하지 않아도 괜찮아요. 나중에 언제든 수정할 수 있어요</p>
-          <p class="usage-input-help">자주 쓰는 제품은 소진 시점도 함께 확인할 수 있어요.</p>
+          <p id="landingQuickProductHelp" class="usage-input-help hidden" aria-hidden="true">정확하지 않아도 괜찮아요. 나중에 언제든 수정할 수 있어요</p>
           <button id="landingPrimaryCta" class="landing-primary-cta" type="button">
             오늘 피부 기록 시작하기
           </button>
+          <button id="landingTrialCta" class="landing-secondary-cta" type="button">
+            3초 체험하기
+          </button>
           <div id="demoLoginPrompt" class="demo-login-prompt hidden" aria-hidden="true">
             <strong class="demo-login-prompt-value">먼저 가볍게 써보세요</strong>
-            <p>로그인하면 입력한 제품을 내 루틴에 저장할 수 있어요.</p>
+            <p>Google 로그인하면 기록을 계속 보관할 수 있어요.</p>
             <div class="demo-login-prompt-actions">
               <button id="demoPromptAnonLoginBtn" class="landing-start-btn landing-start-btn--anon" type="button">익명으로 시작</button>
-              <button id="demoPromptGoogleLoginBtn" class="landing-start-btn landing-start-btn--google" type="button">저장하려면 Google 로그인</button>
+              <button id="demoPromptGoogleLoginBtn" class="landing-start-btn landing-start-btn--google" type="button">Google로 기록 저장하기</button>
             </div>
           </div>
         </div>
@@ -244,7 +250,7 @@
 
         <div id="landingStartActions" class="landing-start-actions" aria-label="시작하기">
           <button id="anonLoginBtn" class="landing-start-btn landing-start-btn--anon" type="button">익명으로 시작</button>
-          <button id="googleLoginBtn" class="landing-start-btn landing-start-btn--google" type="button">저장하려면 Google 로그인</button>
+          <button id="googleLoginBtn" class="landing-start-btn landing-start-btn--google" type="button">Google로 기록 저장하기</button>
         </div>
 
         <div class="landing-secondary-actions">
@@ -262,22 +268,92 @@
     </section>
 
     <div id="primaryAppSections" class="primary-app-sections">
-      <section id="soonDepletionSection" class="card soon-depletion-card active-priority-card today-action-hub-card" aria-label="오늘 할 일">
+      <section id="skinLogCard" class="card skin-log-card" aria-label="오늘 피부 상태 기록">
+        <div class="skin-log-header">
+          <div>
+            <h3>오늘 피부 상태는 어땠나요?</h3>
+            <p>제품을 입력하지 않아도 피부 상태만 먼저 기록할 수 있어요.</p>
+          </div>
+        </div>
+        <div class="skin-log-body">
+          <fieldset class="skin-log-fieldset">
+            <legend>피부 상태</legend>
+            <div class="skin-log-chip-group skin-log-chip-group--primary" aria-label="오늘 피부 상태 선택">
+              <button class="skin-log-chip" type="button" data-skin-state="좋음" aria-pressed="false">좋음</button>
+              <button class="skin-log-chip" type="button" data-skin-state="보통" aria-pressed="false">보통</button>
+              <button class="skin-log-chip" type="button" data-skin-state="건조" aria-pressed="false">건조</button>
+              <button class="skin-log-chip" type="button" data-skin-state="트러블" aria-pressed="false">트러블</button>
+            </div>
+          </fieldset>
+
+          <details id="skinLogDetails" class="skin-log-details">
+            <summary class="skin-log-native-summary">자세히 기록하기</summary>
+
+            <fieldset class="skin-log-fieldset skin-log-fieldset--detail">
+              <legend>추가 피부 상태</legend>
+              <div class="skin-log-chip-group" aria-label="추가 피부 상태 선택">
+                <button class="skin-log-chip" type="button" data-skin-state="붉어짐" aria-pressed="false">붉어짐</button>
+                <button class="skin-log-chip" type="button" data-skin-state="좁쌀" aria-pressed="false">좁쌀</button>
+                <button class="skin-log-chip" type="button" data-skin-state="가려움" aria-pressed="false">가려움</button>
+                <button class="skin-log-chip" type="button" data-skin-state="따가움" aria-pressed="false">따가움</button>
+              </div>
+            </fieldset>
+
+            <fieldset class="skin-log-fieldset skin-log-fieldset--detail">
+              <legend>오늘 특이사항이 있었나요?</legend>
+              <div class="skin-log-chip-group" aria-label="오늘 피부 특이사항 선택">
+                <button class="skin-log-chip skin-log-chip--event" type="button" data-skin-event="새 제품 사용" aria-pressed="false">새 제품 사용</button>
+                <button class="skin-log-chip skin-log-chip--event" type="button" data-skin-event="피부과 방문" aria-pressed="false">피부과 방문</button>
+                <button class="skin-log-chip skin-log-chip--event" type="button" data-skin-event="약/연고 사용" aria-pressed="false">약/연고 사용</button>
+                <button class="skin-log-chip skin-log-chip--event" type="button" data-skin-event="수면 부족" aria-pressed="false">수면 부족</button>
+                <button class="skin-log-chip skin-log-chip--event" type="button" data-skin-event="생리 전후" aria-pressed="false">생리 전후</button>
+                <button class="skin-log-chip skin-log-chip--event" type="button" data-skin-event="음주" aria-pressed="false">음주</button>
+                <button class="skin-log-chip skin-log-chip--event" type="button" data-skin-event="마스크 오래 착용" aria-pressed="false">마스크 오래 착용</button>
+                <button class="skin-log-chip skin-log-chip--event" type="button" data-skin-event="스트레스" aria-pressed="false">스트레스</button>
+              </div>
+            </fieldset>
+
+            <label class="skin-log-memo-label" for="skinLogMemo">메모</label>
+            <textarea id="skinLogMemo" class="skin-log-memo" placeholder="예: 볼 쪽 따가움, 턱에 좁쌀 올라옴"></textarea>
+          </details>
+
+          <div class="skin-log-action-bar" aria-label="피부 기록 실행">
+            <button id="skinLogDetailsToggle" class="skin-log-detail-toggle-btn" type="button" aria-expanded="false" aria-controls="skinLogDetails">
+              자세히 기록하기
+            </button>
+            <button id="saveSkinLogBtn" class="skin-log-save-btn" type="button" disabled>피부 상태 저장하기</button>
+          </div>
+
+          <p class="skin-log-helper">오늘 쓴 제품도 함께 체크하면 나중에 피부 변화와 같이 볼 수 있어요.</p>
+          <div id="skinLogSavedSummary" class="skin-log-saved-summary hidden" aria-hidden="true"></div>
+          <p id="skinLogStatus" class="skin-log-status" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <div class="product-support-note" aria-label="제품 기록 안내">
+        <div>
+          <strong>오늘 사용한 제품</strong>
+          <span>나중에 추가해도 괜찮아요</span>
+        </div>
+        <button id="productSupportAddBtn" class="product-support-add-btn" type="button">+ 추가</button>
+      </div>
+
+      <section id="soonDepletionSection" class="card soon-depletion-card active-priority-card today-action-hub-card" aria-label="제품 기록 보조">
         <div class="home-section-heading">
           <div>
-            <div class="today-status-eyebrow">오늘 할 일</div>
-            <h3>오늘 피부 기록</h3>
+            <div class="today-status-eyebrow">선택 기록</div>
+            <h3>오늘 쓴 제품도 같이 체크하기</h3>
           </div>
         </div>
         <div class="today-action-hub">
-          <div id="activeTodayCtaSection" class="active-cta-section" aria-label="오늘 할 일 실행">
+          <div id="activeTodayCtaSection" class="active-cta-section" aria-label="제품 기록 실행">
             <div id="today-cta" class="home-primary-cta today-action-panel" aria-hidden="false">
               <div class="today-action-copy">
-                <strong id="topCtaTitle">오늘 피부 상태와 사용한 제품을 기록해보세요.</strong>
+                <strong id="topCtaTitle">제품을 체크하면 피부 변화와 함께 볼 수 있어요.</strong>
                 <p id="topCtaHelper" class="cta-helper hidden"></p>
               </div>
               <div class="today-action-buttons">
-                <button id="cta-btn" type="button" data-action="add-product">지금 기록하기</button>
+                <button id="cta-btn" type="button" data-action="add-product">제품 같이 남기기</button>
                 <button id="topSecondaryActionBtn" class="top-secondary-action-btn" type="button" data-action="add-product">제품 추가</button>
               </div>
               <p id="topCtaNote" class="cta-note" aria-live="polite">제품을 체크하면 나중에 피부 변화와 함께 볼 수 있어요.</p>
@@ -288,8 +364,8 @@
             <div class="today-representative-desc">최근 기록 기준으로 먼저 소진될 제품을 보여드려요</div>
             <div id="soonDepletionList"></div>
           </div>
-          <div id="homeStatusSummary" class="home-status-summary today-action-hub-summary" aria-label="오늘 할 일 요약">
-            <div class="today-summary-heading">오늘 요약</div>
+          <div id="homeStatusSummary" class="home-status-summary today-action-hub-summary" aria-label="제품 기록 요약">
+            <div class="today-summary-heading">제품 기록 요약</div>
             <article class="home-status-stat">
               <span class="home-status-stat-label">오늘 기록 필요</span>
               <strong id="homePendingRoutineCount">0개</strong>
@@ -347,12 +423,12 @@
         </p>
       </section>
 
-      <section id="product-section" aria-label="루틴별 제품 현황">
+      <section id="product-section" aria-label="제품 기록 현황">
         <div id="routineProductsSection" aria-hidden="true"></div>
         <div class="product-list-heading">
           <div>
-            <h3>루틴별 제품 현황</h3>
-            <p id="firstActionGuideText" class="first-action-guide-text" data-persistent="true">아침·저녁에 함께 쓰는 제품을 체크하고 한 번에 기록하세요</p>
+            <h3>제품 기록 현황</h3>
+            <p id="firstActionGuideText" class="first-action-guide-text" data-persistent="true">오늘 쓴 제품을 같이 체크하면 피부 기록과 함께 볼 수 있어요</p>
           </div>
           <div class="product-list-controls" aria-label="제품 목록 정렬 및 필터">
             <label class="product-sort-control" for="productListSort">
@@ -379,8 +455,8 @@
         <div id="productCreationCard" class="card product-add-card">
           <div class="product-section-heading">
             <div>
-              <h3>제품 추가</h3>
-              <p class="first-action-guide-text">남은 양이 잘 안 보이는 튜브형/펌프형 제품도 대략 기록할 수 있어요</p>
+              <h3>오늘 쓴 제품도 같이 남겨보세요.</h3>
+              <p class="first-action-guide-text">자주 쓰는 제품은 소진 시점도 함께 확인할 수 있어요.</p>
             </div>
             <button
               id="productFormToggleBtn"

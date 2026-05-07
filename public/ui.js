@@ -70,6 +70,7 @@
     const RECENT_LOG_FETCH_LIMIT = 100;
     const HISTORY_ENTRY_LIMIT = 30;
     const HISTORY_LOG_FETCH_LIMIT = 60;
+    const HISTORY_SKIN_LOG_FETCH_LIMIT = 60;
     const PRODUCT_DETAIL_LOG_LIMIT = 6;
     const HOME_PRODUCT_PREVIEW_LIMIT = 4;
     const ACTIVE_VIEW_STORAGE_KEY = "cosmeticTrackerActiveView";
@@ -288,6 +289,9 @@
     let isLandingTransitionRunning = false;
     const productFormTouchedFields = new Set();
     let historyUsageEvents = [];
+    let historySkinLogs = [];
+    const selectedSkinStates = new Set();
+    const selectedSkinEvents = new Set();
     let historyFilterMode = "all";
     let usageCalendarVisibleMonth = getCurrentMonthStartDate();
     let selectedUsageCalendarDateKey = formatDateYmd(new Date());
@@ -1055,9 +1059,29 @@
       const bannerEl = document.getElementById("demoModeBanner");
       if (!bannerEl) return;
 
-      const shouldShow = isDemo === true;
+      const shouldShow = isDemoMode();
       bannerEl.classList.toggle("hidden", !shouldShow);
       bannerEl.setAttribute("aria-hidden", shouldShow ? "false" : "true");
+    }
+
+    function updateAuthStateBanner(user = currentUser) {
+      const bannerEl = document.getElementById("authStateBanner");
+      if (!bannerEl) return;
+
+      let message = "";
+      if (isDemoMode()) {
+        message = "체험 모드입니다. 데이터는 저장되지 않아요.";
+      } else if (user?.isAnonymous === true) {
+        message = "익명으로 저장 중입니다. Google 로그인하면 기록을 계속 보관할 수 있어요.";
+      } else if (user) {
+        message = "Google 계정에 기록이 저장되고 있어요.";
+      } else {
+        message = "로그인 없이 시작할 수 있어요. 저장할 때 익명으로 보관돼요.";
+      }
+
+      bannerEl.textContent = message;
+      bannerEl.classList.toggle("hidden", !message);
+      bannerEl.setAttribute("aria-hidden", message ? "false" : "true");
     }
 
     function updateDemoLoginPrompt() {
@@ -1384,10 +1408,7 @@
     function shouldShowLandingFirstScreen() {
       if (isDemoMode()) return !hasEnteredPrimaryFlow;
       if (currentUser && currentUid) return false;
-      if (hasEnteredPrimaryFlow) return false;
-      if (shouldForceLandingFirstScreen()) return true;
-
-      return !hasFirestoreProductData();
+      return !hasEnteredPrimaryFlow;
     }
 
     function syncEntryFlowWithProductState(products = activeProducts) {
@@ -1403,10 +1424,7 @@
     }
 
     function shouldFocusProductOnboarding() {
-      return hasEnteredPrimaryFlow
-        && activeScreen === "home"
-        && !hasRegisteredProducts
-        && getDisplayProducts().length === 0;
+      return false;
     }
 
     function updatePrimaryExperienceStage() {
@@ -1487,6 +1505,7 @@
 
       updateDemoToolbar();
       updateDemoModeBanner();
+      updateAuthStateBanner(currentUser);
       updateDemoLoginPrompt();
       updatePrimaryExperienceStage();
       const shouldWaitForFirestoreProducts = Boolean(currentUser)
@@ -1878,7 +1897,7 @@
 
       const isExpandedInCurrentView = !shouldCollapse && (activeScreen === "home" || activeScreen === "history");
       toggleBtn.disabled = isDemoMode();
-      toggleBtn.textContent = isExpandedInCurrentView ? "입력 폼 접기" : "제품 추가하기";
+      toggleBtn.textContent = isExpandedInCurrentView ? "입력 폼 접기" : "제품 같이 남기기";
       toggleBtn.setAttribute("aria-expanded", isExpandedInCurrentView ? "true" : "false");
       toggleBtn.classList.toggle("product-form-toggle-btn--expanded", isExpandedInCurrentView);
     }
@@ -2499,33 +2518,42 @@
       }
     }
 
+    function focusSkinLogCard() {
+      activeScreen = "home";
+      writeStorageItem(ACTIVE_VIEW_STORAGE_KEY, activeScreen);
+      enterPrimaryFlow();
+      updateFirstScreenFocus();
+      requestAnimationFrame(() => {
+        const cardEl = document.getElementById("skinLogCard");
+        if (!cardEl) return;
+        cardEl.scrollIntoView({ behavior: getPreferredScrollBehavior(), block: "start" });
+        cardEl.setAttribute("tabindex", "-1");
+        focusElementWithoutScroll(cardEl);
+      });
+    }
+
     async function handleLandingPrimaryCta() {
       if (isLandingTransitionRunning) return;
 
       const didRevealSections = await playLandingToServiceTransition();
-      const run = async () => {
-        await handleHeroPrimaryCta();
+      const run = () => {
+        focusSkinLogCard();
       };
 
       if (didRevealSections) {
         requestAnimationFrame(() => {
-          void run();
+          run();
         });
         return;
       }
 
-      await run();
+      run();
     }
 
     async function handleLandingInputCta() {
-      if (!getLandingQuickProductName()) {
-        focusLandingQuickProductNameInput();
-        return;
-      }
-
       recordFirebaseClickEvent("click_login", {
-        method: "anonymous",
-        source: "landing_input"
+        method: "start",
+        source: "landing"
       });
       await handleLandingPrimaryCta();
     }
@@ -3735,6 +3763,261 @@
       return `${safeText.slice(0, maxLength - 1)}…`;
     }
 
+    function truncateSkinLogMemo(text, maxLength = 42) {
+      const safeText = String(text || "").trim();
+      if (!safeText) return "";
+      if (safeText.length <= maxLength) return safeText;
+      return `${safeText.slice(0, maxLength - 1)}…`;
+    }
+
+    function parseLoggedDate(dateKey) {
+      const safeKey = String(dateKey || "").trim();
+      const match = safeKey.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!match) return null;
+      const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    function getSkinLogActivityDate(logItem) {
+      return parseLoggedDate(logItem?.loggedDate) || toDateSafe(logItem?.createdAt) || new Date();
+    }
+
+    function normalizeStringArray(value) {
+      if (!Array.isArray(value)) return [];
+      return value
+        .map((item) => String(item || "").trim())
+        .filter(Boolean);
+    }
+
+    function getSkinLogItemFromDoc(doc) {
+      const data = doc.data() || {};
+      return {
+        id: doc.id,
+        ownerId: data.ownerId || "",
+        createdAt: data.createdAt || null,
+        loggedDate: data.loggedDate || "",
+        skinStates: normalizeStringArray(data.skinStates),
+        skinEvents: normalizeStringArray(data.skinEvents),
+        memo: String(data.memo || ""),
+        usedProductIds: normalizeStringArray(data.usedProductIds),
+        usedProductNames: normalizeStringArray(data.usedProductNames),
+        source: String(data.source || ""),
+        isAnonymous: data.isAnonymous === true
+      };
+    }
+
+    function buildSkinHistoryEntries(skinLogs = []) {
+      return (Array.isArray(skinLogs) ? skinLogs : [])
+        .map((logItem) => {
+          const activityDate = getSkinLogActivityDate(logItem);
+          const statesText = logItem.skinStates.length ? escapeHtml(logItem.skinStates.join(", ")) : "-";
+          const eventsText = logItem.skinEvents.length ? escapeHtml(logItem.skinEvents.join(", ")) : "-";
+          const memoText = escapeHtml(truncateSkinLogMemo(logItem.memo));
+          return {
+            id: `skin-${logItem.id}`,
+            type: "skin",
+            category: "skin",
+            categoryLabel: "피부 기록",
+            dateBucket: getHistoryDateBucket(activityDate),
+            activityDate,
+            title: `${activityDate.getMonth() + 1}월 ${activityDate.getDate()}일`,
+            timeText: formatHistoryTime(logItem.createdAt || activityDate, {
+              includeDate: getHistoryDateBucket(activityDate) === "earlier"
+            }),
+            summary: `피부 상태: ${statesText}`,
+            detailText: [
+              `특이사항: ${eventsText}`,
+              memoText ? `메모: ${memoText}` : ""
+            ].filter(Boolean).join("<br>")
+          };
+        });
+    }
+
+    function getSkinLogIconForDate(logs = []) {
+      const stateSet = new Set();
+      const eventSet = new Set();
+      logs.forEach((logItem) => {
+        normalizeStringArray(logItem?.skinStates).forEach((state) => stateSet.add(state));
+        normalizeStringArray(logItem?.skinEvents).forEach((eventItem) => eventSet.add(eventItem));
+      });
+      if (eventSet.has("피부과 방문") || eventSet.has("약/연고 사용")) return "🏥";
+      if (stateSet.has("트러블") || stateSet.has("좁쌀") || stateSet.has("붉어짐")) return "🔥";
+      if (stateSet.has("건조") || stateSet.has("건조함")) return "💧";
+      if (stateSet.has("좋음")) return "😊";
+      return "";
+    }
+
+    function getTodayUsedProductSnapshot() {
+      const todayKey = formatDateYmd(new Date());
+      const productIds = new Set();
+      const productNames = new Set();
+      recentUsageEvents.forEach((eventItem) => {
+        const eventDate = toDateSafe(eventItem?.createdAt);
+        if (!eventDate || formatDateYmd(eventDate) !== todayKey) return;
+        if (eventItem.productId) productIds.add(eventItem.productId);
+        if (eventItem.productName) productNames.add(eventItem.productName);
+      });
+      return {
+        usedProductIds: Array.from(productIds),
+        usedProductNames: Array.from(productNames)
+      };
+    }
+
+    function getSkinLogSource() {
+      const from = String(queryParams.get("from") || "").trim();
+      if (from) return from;
+      return String(queryParams.get("utm_source") || "").trim();
+    }
+
+    function getSkinLogDeviceType() {
+      const userAgent = navigator.userAgent || "";
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent)
+        || window.innerWidth <= 768;
+      return isMobile ? "mobile" : "desktop";
+    }
+
+    function setSkinLogStatus(message = "") {
+      const statusEl = document.getElementById("skinLogStatus");
+      if (statusEl) statusEl.textContent = message;
+    }
+
+    function syncSkinLogDetailsToggle() {
+      const detailsEl = document.getElementById("skinLogDetails");
+      const toggleBtn = document.getElementById("skinLogDetailsToggle");
+      if (!detailsEl || !toggleBtn) return;
+
+      const isOpen = detailsEl.open === true;
+      toggleBtn.textContent = isOpen ? "간단히 보기" : "자세히 기록하기";
+      toggleBtn.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      toggleBtn.classList.toggle("skin-log-detail-toggle-btn--open", isOpen);
+    }
+
+    function updateSkinLogSaveButtonState(options = {}) {
+      const saveBtn = document.getElementById("saveSkinLogBtn");
+      if (!saveBtn) return;
+
+      const memo = String(document.getElementById("skinLogMemo")?.value || "").trim();
+      const canSave = selectedSkinStates.size > 0 || selectedSkinEvents.size > 0 || Boolean(memo);
+      const isSaving = options.isSaving === true;
+      saveBtn.disabled = isSaving || !canSave;
+      saveBtn.classList.toggle("skin-log-save-btn--ready", canSave && !isSaving);
+      saveBtn.textContent = isSaving ? "저장 중..." : "피부 상태 저장하기";
+    }
+
+    function updateSkinLogChip(buttonEl, selected) {
+      if (!buttonEl) return;
+      buttonEl.classList.toggle("skin-log-chip--selected", Boolean(selected));
+      buttonEl.setAttribute("aria-pressed", selected ? "true" : "false");
+    }
+
+    function clearSkinLogForm() {
+      selectedSkinStates.clear();
+      selectedSkinEvents.clear();
+      document.querySelectorAll("[data-skin-state], [data-skin-event]").forEach((buttonEl) => {
+        updateSkinLogChip(buttonEl, false);
+      });
+      const memoEl = document.getElementById("skinLogMemo");
+      if (memoEl) memoEl.value = "";
+      const detailsEl = document.getElementById("skinLogDetails");
+      if (detailsEl) detailsEl.open = false;
+      syncSkinLogDetailsToggle();
+      updateSkinLogSaveButtonState();
+    }
+
+    function renderSkinLogSavedSummary(skinStates = [], skinEvents = [], memo = "") {
+      const summaryEl = document.getElementById("skinLogSavedSummary");
+      if (!summaryEl) return;
+
+      const stateText = skinStates.length ? skinStates.join(", ") : "메모 기록";
+      const eventText = skinEvents.length ? skinEvents.join(", ") : "";
+      const memoText = truncateSkinLogMemo(memo, 34);
+      summaryEl.innerHTML = `
+        <strong>오늘 기록 완료</strong>
+        <span>피부 상태: ${escapeHtml(stateText)}</span>
+        ${eventText ? `<span>특이사항: ${escapeHtml(eventText)}</span>` : ""}
+        ${memoText ? `<span>메모: ${escapeHtml(memoText)}</span>` : ""}
+        <span>제품도 함께 기록하면 나중에 피부 변화와 같이 볼 수 있어요.</span>
+      `;
+      summaryEl.classList.remove("hidden");
+      summaryEl.setAttribute("aria-hidden", "false");
+    }
+
+    function toggleSkinLogSelection(buttonEl, targetSet, value) {
+      if (!buttonEl || !value) return;
+      if (targetSet.has(value)) {
+        targetSet.delete(value);
+        updateSkinLogChip(buttonEl, false);
+        updateSkinLogSaveButtonState();
+        return;
+      }
+      targetSet.add(value);
+      updateSkinLogChip(buttonEl, true);
+      updateSkinLogSaveButtonState();
+    }
+
+    async function saveSkinLog() {
+      console.log("[skin-log] save clicked");
+      const saveBtn = document.getElementById("saveSkinLogBtn");
+      const memoEl = document.getElementById("skinLogMemo");
+      const skinStates = Array.from(selectedSkinStates);
+      const skinEvents = Array.from(selectedSkinEvents);
+      const memo = String(memoEl?.value || "").trim();
+
+      if (!skinStates.length && !skinEvents.length && !memo) {
+        setSkinLogStatus("피부 상태나 메모를 하나 이상 남겨주세요.");
+        return;
+      }
+
+      const canWrite = await ensureAuthenticatedForSkinLog();
+      const authUser = auth?.currentUser || currentUser || null;
+      if (!canWrite || !authUser?.uid) {
+        setSkinLogStatus("피부 기록 저장에 실패했어요. 다시 시도해주세요.");
+        return;
+      }
+
+      currentUser = authUser;
+      currentUid = authUser.uid;
+
+      const todayUsedProducts = getTodayUsedProductSnapshot();
+      const source = getSkinLogSource();
+      const payload = {
+        ownerId: authUser.uid,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        loggedDate: formatDateYmd(new Date()),
+        skinStates,
+        skinEvents,
+        memo,
+        usedProductIds: todayUsedProducts.usedProductIds,
+        usedProductNames: todayUsedProducts.usedProductNames,
+        source,
+        isAnonymous: authUser.isAnonymous === true,
+        deviceType: getSkinLogDeviceType()
+      };
+
+      updateSkinLogSaveButtonState({ isSaving: true });
+      setSkinLogStatus("저장 중...");
+
+      try {
+        await getSkinLogRef().add(payload);
+        showToast("오늘 피부 기록이 저장됐어요.", "", 1700, {
+          variant: "success"
+        });
+        setSkinLogStatus("오늘 피부 기록이 저장됐어요.");
+        renderSkinLogSavedSummary(skinStates, skinEvents, memo);
+        clearSkinLogForm();
+        await renderSkinLogsForHistory();
+        document.getElementById("skinLogCard")?.scrollIntoView({
+          behavior: getPreferredScrollBehavior(),
+          block: "start"
+        });
+      } catch (error) {
+        console.error(error);
+        setSkinLogStatus("피부 기록 저장에 실패했어요. 다시 시도해주세요.");
+      } finally {
+        updateSkinLogSaveButtonState();
+      }
+    }
+
     function inferHistoryProductKeyword(productName = "") {
       const safeName = String(productName || "").trim();
       const keywords = ["바디로션", "선크림", "에센스", "세럼", "토너", "로션", "크림"];
@@ -3785,18 +4068,27 @@
         });
     }
 
-    function renderUsageHistoryList(events = []) {
+    function renderUsageHistoryList(events = [], skinLogs = historySkinLogs) {
       const listEl = document.getElementById("historyList");
       if (!listEl) return;
 
-      renderUsageCalendar(events);
+      renderUsageCalendar(events, skinLogs);
 
-      const allEntries = buildUsageHistoryEntries(events);
+      const allEntries = [
+        ...buildUsageHistoryEntries(events),
+        ...buildSkinHistoryEntries(skinLogs)
+      ]
+        .sort((a, b) => {
+          const dateA = toDateSafe(a?.activityDate)?.getTime() || 0;
+          const dateB = toDateSafe(b?.activityDate)?.getTime() || 0;
+          return dateB - dateA;
+        })
+        .slice(0, HISTORY_ENTRY_LIMIT);
       if (!allEntries.length) {
         listEl.innerHTML = `
           <div class="history-empty-state">
             <div class="history-empty-title">📝 아직 기록이 없습니다</div>
-            <div class="history-empty-desc">제품을 사용하고 첫 기록을 남겨보세요.</div>
+            <div class="history-empty-desc">제품 사용이나 피부 상태를 기록해보세요.</div>
           </div>
         `;
         return;
@@ -3810,7 +4102,7 @@
         listEl.innerHTML = `
           <div class="history-empty-state">
             <div class="history-empty-title">오늘 기록이 없습니다</div>
-            <div class="history-empty-desc">전체 기록 탭에서 이전 사용 기록을 확인해보세요.</div>
+            <div class="history-empty-desc">전체 기록 탭에서 이전 기록을 확인해보세요.</div>
           </div>
         `;
         return;
@@ -3928,7 +4220,7 @@
       return routineText || "개별 사용";
     }
 
-    function renderUsageCalendarDayDetail(events = [], dateKey = selectedUsageCalendarDateKey) {
+    function renderUsageCalendarDayDetail(events = [], dateKey = selectedUsageCalendarDateKey, skinLogs = historySkinLogs) {
       const detailEl = document.getElementById("usageCalendarDayDetail");
       if (!detailEl) return;
 
@@ -3946,12 +4238,17 @@
           const bTime = toDateSafe(b?.createdAt)?.getTime() || 0;
           return aTime - bTime;
         });
+      const daySkinLogs = (Array.isArray(skinLogs) ? skinLogs : [])
+        .filter((logItem) => {
+          const logDate = getSkinLogActivityDate(logItem);
+          return logDate && formatDateYmd(logDate) === dateKey;
+        });
 
-      if (!dayEvents.length) {
+      if (!dayEvents.length && !daySkinLogs.length) {
         detailEl.innerHTML = `
           <div class="usage-calendar-detail-card usage-calendar-detail-card--empty">
             <div class="usage-calendar-detail-date">${escapeHtml(label)}</div>
-            <p>이 날은 아직 사용 기록이 없어요</p>
+            <p>이 날은 아직 기록이 없어요</p>
           </div>
         `;
         return;
@@ -3962,6 +4259,23 @@
         <div class="usage-calendar-detail-card">
           <div class="usage-calendar-detail-date">${escapeHtml(label)}</div>
           <div class="usage-calendar-detail-list">
+            ${daySkinLogs.map((logItem) => {
+              const statesText = logItem.skinStates.length ? logItem.skinStates.join(", ") : "-";
+              const eventsText = logItem.skinEvents.length ? logItem.skinEvents.join(", ") : "-";
+              const memoText = truncateSkinLogMemo(logItem.memo);
+              return `
+                <article class="usage-calendar-detail-item usage-calendar-detail-item--skin">
+                  <div>
+                    <strong>피부 상태: ${escapeHtml(statesText)}</strong>
+                    <span>특이사항: ${escapeHtml(eventsText)}</span>
+                    ${memoText ? `<span>메모: ${escapeHtml(memoText)}</span>` : ""}
+                  </div>
+                  <div class="usage-calendar-detail-meta">
+                    <span>피부 기록</span>
+                  </div>
+                </article>
+              `;
+            }).join("")}
             ${dayEvents.map((eventItem) => {
               const fallbackName = String(eventItem?.productName || "").trim();
               const product = productById.get(eventItem?.productId) || productByName.get(fallbackName);
@@ -3987,7 +4301,7 @@
       `;
     }
 
-    function renderUsageCalendar(events = historyUsageEvents) {
+    function renderUsageCalendar(events = historyUsageEvents, skinLogs = historySkinLogs) {
       const monthLabelEl = document.getElementById("usageCalendarMonthLabel");
       const summaryEl = document.getElementById("usageCalendarSummary");
       const gridEl = document.getElementById("usageCalendarGrid");
@@ -3998,6 +4312,8 @@
       monthDate.setDate(1);
       usageCalendarVisibleMonth = monthDate;
       const monthEvents = getUsageCalendarMonthEvents(events, monthDate);
+      const monthSkinLogs = (Array.isArray(skinLogs) ? skinLogs : [])
+        .filter((logItem) => isSameMonth(getSkinLogActivityDate(logItem), monthDate));
       const summary = getUsageCalendarSummary(monthEvents);
       const currentMonthKey = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, "0")}`;
       if (!selectedUsageCalendarDateKey.startsWith(currentMonthKey)) {
@@ -4010,8 +4326,8 @@
       monthLabelEl.textContent = getUsageCalendarMonthLabel(monthDate);
       if (emptyMessageEl) {
         emptyMessageEl.textContent = summary.hasData
-          ? "기록한 날을 눌러 하루 사용 내역을 확인하세요"
-          : "제품을 기록하면 사용 캘린더가 채워져요";
+          ? "기록한 날을 눌러 하루 기록을 확인하세요"
+          : (monthSkinLogs.length ? "피부 기록이 있는 날을 눌러 확인하세요" : "제품을 기록하면 사용 캘린더가 채워져요");
       }
       summaryEl.innerHTML = `
         <article class="usage-calendar-summary-item">
@@ -4039,6 +4355,15 @@
         const key = formatDateYmd(eventDate);
         eventCountByDate.set(key, (eventCountByDate.get(key) || 0) + 1);
       });
+      const skinLogsByDate = new Map();
+      monthSkinLogs.forEach((logItem) => {
+        const logDate = getSkinLogActivityDate(logItem);
+        if (!logDate) return;
+        const key = formatDateYmd(logDate);
+        const current = skinLogsByDate.get(key) || [];
+        current.push(logItem);
+        skinLogsByDate.set(key, current);
+      });
 
       const firstDay = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
       const lastDay = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
@@ -4051,9 +4376,12 @@
         const date = new Date(monthDate.getFullYear(), monthDate.getMonth(), day);
         const dateKey = formatDateYmd(date);
         const eventCount = eventCountByDate.get(dateKey) || 0;
+        const daySkinLogs = skinLogsByDate.get(dateKey) || [];
+        const skinIcon = getSkinLogIconForDate(daySkinLogs);
         const className = [
           "usage-calendar-day",
           eventCount > 0 ? "usage-calendar-day--has-record" : "",
+          daySkinLogs.length > 0 ? "usage-calendar-day--has-skin-record" : "",
           dateKey === todayKey ? "usage-calendar-day--today" : "",
           dateKey === selectedUsageCalendarDateKey ? "usage-calendar-day--selected" : ""
         ].filter(Boolean).join(" ");
@@ -4061,11 +4389,12 @@
           <button class="${className}" type="button" data-calendar-date="${dateKey}" aria-pressed="${dateKey === selectedUsageCalendarDateKey ? "true" : "false"}">
             <span class="usage-calendar-day-number">${day}</span>
             ${eventCount > 0 ? `<span class="usage-calendar-day-marker" aria-label="${eventCount}건 기록"></span>` : ""}
+            ${daySkinLogs.length > 0 ? `<span class="usage-calendar-skin-marker" aria-label="피부 기록 있음">${skinIcon || "•"}</span>` : ""}
           </button>
         `);
       }
       gridEl.innerHTML = cells.join("");
-      renderUsageCalendarDayDetail(monthEvents, selectedUsageCalendarDateKey);
+      renderUsageCalendarDayDetail(monthEvents, selectedUsageCalendarDateKey, monthSkinLogs);
     }
 
     function changeUsageCalendarMonth(monthOffset) {
@@ -4074,7 +4403,7 @@
       nextMonth.setMonth(nextMonth.getMonth() + monthOffset, 1);
       usageCalendarVisibleMonth = startOfDay(nextMonth);
       selectedUsageCalendarDateKey = formatDateYmd(usageCalendarVisibleMonth);
-      renderUsageCalendar(historyUsageEvents);
+      renderUsageCalendar(historyUsageEvents, historySkinLogs);
     }
 
     function handleUsageCalendarDateClick(event) {
@@ -4084,7 +4413,37 @@
       if (!dayBtn) return;
       recordFirestoreEvent("calendar_opened");
       selectedUsageCalendarDateKey = dayBtn.getAttribute("data-calendar-date") || selectedUsageCalendarDateKey;
-      renderUsageCalendar(historyUsageEvents);
+      renderUsageCalendar(historyUsageEvents, historySkinLogs);
+    }
+
+    async function renderSkinLogsForHistory() {
+      if (!currentUser || !currentUid || !db || shouldSkipFirestoreForDemo() || isDemoMode()) {
+        historySkinLogs = [];
+        if (activeScreen === "history") {
+          renderUsageHistoryList(historyUsageEvents, historySkinLogs);
+        }
+        return;
+      }
+
+      try {
+        const snap = await getSkinLogRef()
+          .where("ownerId", "==", currentUser.uid)
+          .limit(HISTORY_SKIN_LOG_FETCH_LIMIT)
+          .get();
+        historySkinLogs = snap.docs
+          .map(getSkinLogItemFromDoc)
+          .sort((a, b) => {
+            const dateA = getSkinLogActivityDate(a)?.getTime() || 0;
+            const dateB = getSkinLogActivityDate(b)?.getTime() || 0;
+            return dateB - dateA;
+          });
+        if (activeScreen === "history") {
+          renderUsageHistoryList(historyUsageEvents, historySkinLogs);
+        }
+      } catch (error) {
+        console.error(error);
+        historySkinLogs = [];
+      }
     }
 
     async function renderUsageHistory() {
@@ -4093,7 +4452,8 @@
 
       if (shouldSkipFirestoreForDemo()) {
         historyUsageEvents = [];
-        renderUsageCalendar(historyUsageEvents);
+        historySkinLogs = [];
+        renderUsageCalendar(historyUsageEvents, historySkinLogs);
         listEl.innerHTML = `
           <div class="history-empty-state">
             <div class="history-empty-title">데모 모드에서는 기록이 고정됩니다</div>
@@ -4105,7 +4465,8 @@
 
       if (isDemoMode()) {
         historyUsageEvents = [];
-        renderUsageCalendar(historyUsageEvents);
+        historySkinLogs = [];
+        renderUsageCalendar(historyUsageEvents, historySkinLogs);
         listEl.innerHTML = `
           <div class="history-empty-state">
             <div class="history-empty-title">데모 모드에서는 기록이 고정됩니다</div>
@@ -4117,7 +4478,8 @@
 
       if (!currentUser) {
         historyUsageEvents = [];
-        renderUsageCalendar(historyUsageEvents);
+        historySkinLogs = [];
+        renderUsageCalendar(historyUsageEvents, historySkinLogs);
         listEl.innerHTML = `
           <div class="history-empty-state">
             <div class="history-empty-title">로그인하면 기록을 볼 수 있습니다</div>
@@ -4128,13 +4490,19 @@
       }
 
       try {
-        const snap = await getUsageLogRef()
-          .where("ownerId", "==", currentUser.uid)
-          .orderBy("createdAt", "desc")
-          .limit(HISTORY_LOG_FETCH_LIMIT)
-          .get();
+        const [usageSnap, skinSnap] = await Promise.all([
+          getUsageLogRef()
+            .where("ownerId", "==", currentUser.uid)
+            .orderBy("createdAt", "desc")
+            .limit(HISTORY_LOG_FETCH_LIMIT)
+            .get(),
+          getSkinLogRef()
+            .where("ownerId", "==", currentUser.uid)
+            .limit(HISTORY_SKIN_LOG_FETCH_LIMIT)
+            .get()
+        ]);
 
-        historyUsageEvents = snap.docs.map((doc) => {
+        historyUsageEvents = usageSnap.docs.map((doc) => {
           const data = doc.data() || {};
           return {
             id: doc.id,
@@ -4153,8 +4521,15 @@
             pending: false
           };
         });
+        historySkinLogs = skinSnap.docs
+          .map(getSkinLogItemFromDoc)
+          .sort((a, b) => {
+            const dateA = getSkinLogActivityDate(a)?.getTime() || 0;
+            const dateB = getSkinLogActivityDate(b)?.getTime() || 0;
+            return dateB - dateA;
+          });
 
-        renderUsageHistoryList(historyUsageEvents);
+        renderUsageHistoryList(historyUsageEvents, historySkinLogs);
       } catch (error) {
         console.error(error);
         listEl.innerHTML = `
@@ -6088,8 +6463,8 @@
     function getHomePriorityEmptyMarkup() {
       return `
         <article class="home-priority-card home-priority-card--empty">
-          <h4>오늘 쓴 제품과 피부 상태를 함께 기록해보세요</h4>
-          <p class="home-priority-empty-copy">제품 1개만 등록하면 오늘 피부 기록을 바로 시작할 수 있어요.</p>
+          <h4>오늘 쓴 제품도 같이 남겨보세요</h4>
+          <p class="home-priority-empty-copy">제품을 체크하면 나중에 피부 변화와 함께 볼 수 있어요.</p>
         </article>
       `;
     }
@@ -7162,12 +7537,12 @@
 
     function getTopCtaConfig() {
       const baseConfig = {
-        priorityLabel: "지금 할 일",
-        title: "오늘 피부 상태와 사용한 제품을 기록해보세요.",
+        priorityLabel: "선택 기록",
+        title: "제품을 체크하면 피부 변화와 함께 볼 수 있어요.",
         text: "첫 제품",
         subtext: "D-day",
         helperText: "",
-        buttonLabel: "지금 기록하기",
+        buttonLabel: "제품 같이 남기기",
         note: "제품을 체크하면 나중에 피부 변화와 함께 볼 수 있어요.",
         mode: "add-product",
         disabled: false
@@ -7177,10 +7552,10 @@
         const demoItem = getDemoModeSoonDepletionItems()[0] || LANDING_DEMO_DEPLETION_ITEMS[0];
         return {
           ...baseConfig,
-          title: "오늘 피부 상태와 사용한 제품을 기록해보세요.",
+          title: "제품을 체크하면 피부 변화와 함께 볼 수 있어요.",
           text: demoItem?.name || "수분 세럼",
           subtext: getSoonDepletionDdayLabel(demoItem?.daysLeft ?? 3),
-          buttonLabel: "지금 기록하기",
+          buttonLabel: "제품 같이 남기기",
           mode: "demo"
         };
       }
@@ -7188,10 +7563,10 @@
       if (isLoadingProductCollection) {
         return {
           ...baseConfig,
-          title: "오늘 피부 기록을 불러오는 중입니다.",
+          title: "제품 기록을 불러오는 중입니다.",
           text: "불러오는 중",
           subtext: "D-day",
-          buttonLabel: "소진 시점 예측 불러오는 중",
+          buttonLabel: "제품 기록 불러오는 중",
           disabled: true
         };
       }
@@ -7200,8 +7575,8 @@
         return {
           ...baseConfig,
           mode: "add-product",
-          buttonLabel: "제품 추가",
-          note: "제품 1개만 추가하면 오늘 피부 기록을 바로 시작할 수 있어요."
+          buttonLabel: "제품 같이 남기기",
+          note: "자주 쓰는 제품은 소진 시점도 함께 확인할 수 있어요."
         };
       }
 
@@ -7211,8 +7586,8 @@
         return {
           ...baseConfig,
           mode: "add-product",
-          buttonLabel: "제품 추가",
-          note: "제품 1개만 추가하면 오늘 피부 기록을 바로 시작할 수 있어요."
+          buttonLabel: "제품 같이 남기기",
+          note: "자주 쓰는 제품은 소진 시점도 함께 확인할 수 있어요."
         };
       }
 
@@ -7221,10 +7596,10 @@
       const routineSession = getPriorityProductRoutineSession(priorityProduct);
       return {
         ...baseConfig,
-        title: "오늘 피부 상태와 사용한 제품을 기록해보세요.",
+        title: "제품을 체크하면 피부 변화와 함께 볼 수 있어요.",
         text: productName || "제품",
         subtext: getProductDdayLabel(daysLeft),
-        buttonLabel: "지금 기록하기",
+        buttonLabel: "제품 같이 남기기",
         note: "제품을 체크하면 나중에 피부 변화와 함께 볼 수 있어요.",
         mode: "routine",
         productId: priorityProduct.id,
@@ -7944,12 +8319,53 @@
       }
     }
 
+    async function ensureAuthenticatedForSkinLog() {
+      if (isDemoMode()) {
+        promptLoginForDemoProductSave();
+        return false;
+      }
+      if (syncCurrentAuthStateFromFirebase()) {
+        showAuthMessage("");
+        return true;
+      }
+      if (!auth) {
+        showAuthMessage("로그인 준비 중이에요. 잠시 후 다시 시도해주세요.");
+        return false;
+      }
+
+      const pendingAuthUser = waitForNextAuthenticatedUser();
+      showAuthMessage("익명 로그인 중...");
+
+      try {
+        const credential = await auth.signInAnonymously();
+        const signedInUser = credential?.user || await pendingAuthUser.promise;
+        currentUser = signedInUser || auth.currentUser || currentUser;
+        currentUid = currentUser?.uid || currentUid;
+        if (!currentUid) {
+          throw new Error("익명 로그인 후 uid를 확인하지 못했습니다.");
+        }
+        recordFirestoreEvent("anonymous_login");
+        updateAuthUI(currentUser);
+        updateProductFormVisibility();
+        return true;
+      } catch (error) {
+        pendingAuthUser.cancel();
+        console.error("[skin-log] auth failed", error);
+        showAuthMessage("로그인 중 문제가 발생했어요. 다시 시도해주세요.");
+        return false;
+      }
+    }
+
     function getUserRef(path) {
       return db.collection("users").doc(currentUid).collection(path);
     }
 
     function getUsageLogRef() {
       return db.collection("usagelogs");
+    }
+
+    function getSkinLogRef() {
+      return db.collection("skinLogs");
     }
 
     function getCurrentRoutineSession(date = new Date()) {
@@ -10488,6 +10904,14 @@
         recordFirestoreEvent("start_clicked");
         await handleLandingInputCta();
       });
+      document.getElementById("landingTrialCta")?.addEventListener("click", async () => {
+        recordFirestoreEvent("start_clicked");
+        recordFirebaseClickEvent("click_login", {
+          method: "trial",
+          source: "landing"
+        });
+        await handleLandingPrimaryCta();
+      });
       document.getElementById("landingQuickProductName")?.addEventListener("keydown", async (event) => {
         if (event.key !== "Enter") return;
         event.preventDefault();
@@ -10585,6 +11009,38 @@
         changeUsageCalendarMonth(1);
       });
       document.getElementById("usageCalendarGrid")?.addEventListener("click", handleUsageCalendarDateClick);
+      document.getElementById("skinLogCard")?.addEventListener("click", (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        const stateBtn = target.closest("[data-skin-state]");
+        if (stateBtn) {
+          toggleSkinLogSelection(stateBtn, selectedSkinStates, stateBtn.getAttribute("data-skin-state"));
+          setSkinLogStatus("");
+          return;
+        }
+        const eventBtn = target.closest("[data-skin-event]");
+        if (eventBtn) {
+          toggleSkinLogSelection(eventBtn, selectedSkinEvents, eventBtn.getAttribute("data-skin-event"));
+          setSkinLogStatus("");
+        }
+      });
+      document.getElementById("skinLogMemo")?.addEventListener("input", () => {
+        setSkinLogStatus("");
+        updateSkinLogSaveButtonState();
+      });
+      document.getElementById("skinLogDetailsToggle")?.addEventListener("click", () => {
+        const detailsEl = document.getElementById("skinLogDetails");
+        if (!detailsEl) return;
+        detailsEl.open = !detailsEl.open;
+        syncSkinLogDetailsToggle();
+      });
+      document.getElementById("skinLogDetails")?.addEventListener("toggle", syncSkinLogDetailsToggle);
+      document.getElementById("saveSkinLogBtn")?.addEventListener("click", () => {
+        void saveSkinLog();
+      });
+      document.getElementById("productSupportAddBtn")?.addEventListener("click", async () => {
+        await navigateToProductFormTarget({ focusInput: true });
+      });
       document.getElementById("productListSort")?.addEventListener("change", (event) => {
         setProductListSortMode(event.target.value);
       });
@@ -10904,6 +11360,7 @@
       const anonLoginBtn = document.getElementById("anonLoginBtn");
       void updateDebugResetButtonVisibility(user);
       updateDataSafetyNotice(user);
+      updateAuthStateBanner(user);
 
       if (isDemoMode()) {
         if (userStatus) userStatus.textContent = `데모 모드 · ${DEMO_MODE_DATA}`;
@@ -10921,7 +11378,7 @@
         googleLoginBtn?.classList.remove("hidden");
         navGoogleLoginBtn?.classList.remove("hidden");
         anonLoginBtn?.classList.remove("hidden");
-        showAuthMessage("쓰기 기능은 로그인 후 사용할 수 있습니다. 로컬 개발은 http://localhost:5500 권장.");
+        showAuthMessage("");
         return;
       }
 
@@ -10977,6 +11434,8 @@
       updateDemoModeBanner();
       updateDemoLoginPrompt();
       void updateDebugResetButtonVisibility(null);
+      updateSkinLogSaveButtonState();
+      syncSkinLogDetailsToggle();
       updateHistoryFilterTabsUI();
       updateRoutineFrequencyFieldVisibility();
       updateCategoryUsageRecommendation();
@@ -11004,6 +11463,10 @@
         isDemo = !user;
         window.isDemo = isDemo;
         isAuthReady = true;
+        if (!user && !hasEnteredPrimaryFlow) {
+          activeScreen = "home";
+          writeStorageItem(ACTIVE_VIEW_STORAGE_KEY, activeScreen);
+        }
         sampleDisplayProducts = [];
         console.log(isDemo ? "mode: DEMO" : "mode: REAL");
         updateDemoModeBanner();
@@ -11013,6 +11476,7 @@
         if (user) {
           sampleDisplayProducts = [];
         }
+        historySkinLogs = [];
         hasRegisteredProducts = false;
         isLoadingProductCollection = Boolean(user);
         isLoadingRecentUsageEvents = Boolean(user);

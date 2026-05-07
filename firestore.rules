@@ -40,6 +40,13 @@ service cloud.firestore {
         && resource.data.ownerId == request.auth.uid;
     }
 
+    match /skinLogs/{docId} {
+      allow create: if request.auth != null
+        && request.resource.data.ownerId == request.auth.uid;
+      allow read, update, delete: if request.auth != null
+        && resource.data.ownerId == request.auth.uid;
+    }
+
     match /visits/{docId} {
       allow create: if request.resource.data.keys().hasOnly([
           "createdAt",
