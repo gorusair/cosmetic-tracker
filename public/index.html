@@ -46,7 +46,7 @@
     </div>
     <div class="view-switch" aria-label="화면 전환">
       <button id="showHomeBtn" class="view-switch-btn view-switch-btn--active" type="button">홈</button>
-      <button id="showHistoryBtn" class="view-switch-btn" type="button">히스토리</button>
+      <button id="showHistoryBtn" class="view-switch-btn" type="button">기록</button>
     </div>
     <button id="logoutBtn" class="nav-logout-btn hidden" type="button">로그아웃</button>
   </header>
@@ -272,7 +272,7 @@
         <div class="skin-log-header">
           <div>
             <h3>오늘 피부 상태는 어땠나요?</h3>
-            <p>제품을 입력하지 않아도 피부 상태만 먼저 기록할 수 있어요.</p>
+            <p>하나만 선택해도 기록할 수 있어요.</p>
           </div>
         </div>
         <div class="skin-log-body">
@@ -321,10 +321,10 @@
             <button id="skinLogDetailsToggle" class="skin-log-detail-toggle-btn" type="button" aria-expanded="false" aria-controls="skinLogDetails">
               자세히 기록하기
             </button>
-            <button id="saveSkinLogBtn" class="skin-log-save-btn" type="button" disabled>피부 상태 저장하기</button>
+            <button id="saveSkinLogBtn" class="skin-log-save-btn" type="button" disabled>피부 상태를 선택해주세요</button>
           </div>
 
-          <p class="skin-log-helper">오늘 쓴 제품도 함께 체크하면 나중에 피부 변화와 같이 볼 수 있어요.</p>
+          <p class="skin-log-helper">저장 후 제품도 연결할 수 있어요.</p>
           <div id="skinLogSavedSummary" class="skin-log-saved-summary hidden" aria-hidden="true"></div>
           <p id="skinLogStatus" class="skin-log-status" aria-live="polite"></p>
         </div>
@@ -332,11 +332,25 @@
 
       <div class="product-support-note" aria-label="제품 기록 안내">
         <div>
-          <strong>오늘 사용한 제품</strong>
-          <span>나중에 추가해도 괜찮아요</span>
+          <strong>오늘 쓴 제품도 남길까요?</strong>
+          <span>피부 변화와 함께 보고 싶다면 제품을 연결해보세요.</span>
         </div>
-        <button id="productSupportAddBtn" class="product-support-add-btn" type="button">+ 추가</button>
+        <div class="product-support-actions">
+          <button id="productSupportAddBtn" class="product-support-add-btn" type="button">+ 제품 연결하기</button>
+          <button id="productSupportSkipBtn" class="product-support-skip-btn" type="button">오늘은 건너뛰기</button>
+        </div>
       </div>
+
+      <section id="additionalFeaturesSection" class="additional-features-section" aria-label="추가 기능">
+        <div class="additional-features-heading">
+          <h3>추가로 남길 수 있어요</h3>
+        </div>
+        <div class="additional-features-list">
+          <button class="additional-feature-link" type="button" data-additional-feature="product">오늘 쓴 제품 연결하기</button>
+          <button class="additional-feature-link" type="button" data-additional-feature="depletion">소진일 확인하기</button>
+          <button class="additional-feature-link" type="button" data-additional-feature="history">사용 캘린더 보기</button>
+        </div>
+      </section>
 
       <section id="soonDepletionSection" class="card soon-depletion-card active-priority-card today-action-hub-card" aria-label="제품 기록 보조">
         <div class="home-section-heading">
@@ -408,6 +422,10 @@
             <span class="monthly-usage-summary-label">가장 많이 사용한 제품</span>
             <strong id="monthlyUsageTopProduct" class="monthly-usage-summary-value monthly-usage-summary-value--product">-</strong>
           </article>
+        </div>
+        <div id="monthlyUsageEmptyState" class="monthly-usage-empty-state hidden" aria-hidden="true">
+          <strong>아직 기록이 적어요.</strong>
+          <span>피부 상태를 몇 번 더 기록하면 요약을 보여드릴게요.</span>
         </div>
       </section>
 

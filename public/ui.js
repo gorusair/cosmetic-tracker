@@ -316,6 +316,8 @@
     let productListSortMode = "today";
     let productListRoutineFilter = "all";
     let productAddMode = "single";
+    let hasCompletedSkinLogThisSession = false;
+    let hasSkippedPostSaveProducts = false;
     let openProductSetupEditorId = "";
     let openProductIdentityEditorId = "";
     let routineSectionHighlightTimer = null;
@@ -1407,16 +1409,11 @@
 
     function shouldShowLandingFirstScreen() {
       if (isDemoMode()) return !hasEnteredPrimaryFlow;
-      if (currentUser && currentUid) return false;
       return !hasEnteredPrimaryFlow;
     }
 
     function syncEntryFlowWithProductState(products = activeProducts) {
       if (isDemoMode()) return;
-
-      if (hasFirestoreProductData(products) && !shouldForceLandingFirstScreen()) {
-        hasEnteredPrimaryFlow = true;
-      }
     }
 
     function shouldFocusFirstScreen() {
@@ -1440,7 +1437,14 @@
       contentEl.classList.toggle("primary-app-sections--demo-warning", demoStage === "warning");
       contentEl.classList.toggle("primary-app-sections--home-mode", isHomeMode);
       contentEl.classList.toggle("primary-app-sections--record-mode", isRecordMode);
+      contentEl.classList.toggle("primary-app-sections--skin-log-saved", hasCompletedSkinLogThisSession);
+      contentEl.classList.toggle("primary-app-sections--product-skipped", hasSkippedPostSaveProducts);
       contentEl.setAttribute("data-stage", demoStage || (shouldFocusProduct ? "product-only" : (isRecordMode ? "record" : "home")));
+    }
+
+    function expandSupplementaryProductArea() {
+      const contentEl = document.getElementById("primaryAppSections");
+      contentEl?.classList.add("primary-app-sections--product-expanded");
     }
 
     function setHomeVisible(visible) {
@@ -1501,6 +1505,10 @@
       if (viewSwitchEl) {
         viewSwitchEl.classList.toggle("hidden", shouldHideViewSwitch);
         viewSwitchEl.setAttribute("aria-hidden", shouldHideViewSwitch ? "true" : "false");
+      }
+      if (shouldCollapse) {
+        document.getElementById("googleLoginBtn")?.classList.remove("hidden");
+        document.getElementById("anonLoginBtn")?.classList.add("hidden");
       }
 
       updateDemoToolbar();
@@ -2018,6 +2026,7 @@
     async function navigateToProductFormTarget(options = {}) {
       await setActiveScreen("home");
       enterPrimaryFlow();
+      expandSupplementaryProductArea();
       transferLandingQuickProductNameToProductForm();
       scrollToProductCreationForm({
         focusInput: options.focusInput !== false,
@@ -2038,6 +2047,7 @@
     async function navigateToRoutineProductsTarget(productId = "") {
       await setActiveScreen("home");
       enterPrimaryFlow();
+      expandSupplementaryProductArea();
       setProductListSortMode("today");
       setProductListRoutineFilter("all");
       requestAnimationFrame(() => {
@@ -2876,17 +2886,20 @@
     function renderMonthlyUsageSummaryCard() {
       const cardEl = document.getElementById("monthlyUsageSummaryCard");
       const messageEl = document.getElementById("monthlyUsageSummaryMessage");
+      const emptyStateEl = document.getElementById("monthlyUsageEmptyState");
       const totalEl = document.getElementById("monthlyUsageTotal");
       const daysEl = document.getElementById("monthlyUsageDays");
       const soonEl = document.getElementById("monthlyUsageSoonDepletion");
       const topProductEl = document.getElementById("monthlyUsageTopProduct");
-      if (!cardEl || !messageEl || !totalEl || !daysEl || !soonEl || !topProductEl) return;
+      if (!cardEl || !messageEl || !emptyStateEl || !totalEl || !daysEl || !soonEl || !topProductEl) return;
 
       const summary = calculateMonthlyUsageSummary();
       cardEl.classList.toggle("monthly-usage-summary-card--empty", !summary.hasData);
       messageEl.textContent = summary.hasData
         ? "이번 달 얼마나 썼는지 한눈에 볼 수 있어요"
-        : "제품을 기록하면 이번 달 사용량을 보여드려요";
+        : "아직 기록이 적어요";
+      emptyStateEl.classList.toggle("hidden", summary.hasData);
+      emptyStateEl.setAttribute("aria-hidden", summary.hasData ? "true" : "false");
       totalEl.innerHTML = summary.hasData
         ? `${formatMlValue(summary.totalAmountMl)}<span class="monthly-usage-summary-unit">ml</span>`
         : "-";
@@ -3901,7 +3914,9 @@
       const isSaving = options.isSaving === true;
       saveBtn.disabled = isSaving || !canSave;
       saveBtn.classList.toggle("skin-log-save-btn--ready", canSave && !isSaving);
-      saveBtn.textContent = isSaving ? "저장 중..." : "피부 상태 저장하기";
+      saveBtn.textContent = isSaving
+        ? "저장 중..."
+        : (canSave ? "피부 상태 저장하기" : "피부 상태를 선택해주세요");
     }
 
     function updateSkinLogChip(buttonEl, selected) {
@@ -3929,17 +3944,16 @@
       if (!summaryEl) return;
 
       const stateText = skinStates.length ? skinStates.join(", ") : "메모 기록";
-      const eventText = skinEvents.length ? skinEvents.join(", ") : "";
-      const memoText = truncateSkinLogMemo(memo, 34);
       summaryEl.innerHTML = `
         <strong>오늘 기록 완료</strong>
         <span>피부 상태: ${escapeHtml(stateText)}</span>
-        ${eventText ? `<span>특이사항: ${escapeHtml(eventText)}</span>` : ""}
-        ${memoText ? `<span>메모: ${escapeHtml(memoText)}</span>` : ""}
-        <span>제품도 함께 기록하면 나중에 피부 변화와 같이 볼 수 있어요.</span>
+        <span class="skin-log-saved-summary-copy">제품도 함께 기록하면 나중에 피부 변화와 같이 볼 수 있어요.</span>
       `;
       summaryEl.classList.remove("hidden");
       summaryEl.setAttribute("aria-hidden", "false");
+      hasCompletedSkinLogThisSession = true;
+      hasSkippedPostSaveProducts = false;
+      updatePrimaryExperienceStage();
     }
 
     function toggleSkinLogSelection(buttonEl, targetSet, value) {
@@ -11039,6 +11053,37 @@
         void saveSkinLog();
       });
       document.getElementById("productSupportAddBtn")?.addEventListener("click", async () => {
+        expandSupplementaryProductArea();
+        await navigateToProductFormTarget({ focusInput: true });
+      });
+      document.getElementById("productSupportSkipBtn")?.addEventListener("click", () => {
+        hasSkippedPostSaveProducts = true;
+        updatePrimaryExperienceStage();
+        focusSkinLogCard();
+      });
+      document.getElementById("additionalFeaturesSection")?.addEventListener("click", async (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        const featureBtn = target.closest("[data-additional-feature]");
+        if (!featureBtn) return;
+
+        const feature = featureBtn.getAttribute("data-additional-feature");
+        if (feature === "history") {
+          await setActiveScreen("history");
+          requestAnimationFrame(() => {
+            scrollToNavTarget("history");
+          });
+          return;
+        }
+
+        expandSupplementaryProductArea();
+        if (feature === "depletion") {
+          requestAnimationFrame(() => {
+            scrollToNavTarget("routineProducts");
+          });
+          return;
+        }
+
         await navigateToProductFormTarget({ focusInput: true });
       });
       document.getElementById("productListSort")?.addEventListener("change", (event) => {
